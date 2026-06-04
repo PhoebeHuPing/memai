@@ -58,7 +58,7 @@ async def chat(request: ChatRequest):
         # Using gemini-2.0-flash as it's the current latest, 
         # but matching the request for gemini-2.5-flash if that's what was intended
         # (though 2.5 doesn't exist yet, 2.0 is latest)
-        model_id = "gemini-1.5-flash" 
+        model_id = "gemini-2.0-flash" 
         
         response = client.models.generate_content(
             model=model_id,
