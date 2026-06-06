@@ -3,3 +3,8 @@ uvicorn
 google-genai
 python-dotenv
 pydantic
+llama-index
+llama-index-vector-stores-chroma
+llama-parse
+chromadb
+nest-asyncio
