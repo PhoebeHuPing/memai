@@ -6,6 +6,10 @@ from unittest.mock import MagicMock, patch
 # Add project root to path
 sys.path.append(os.getcwd())
 
+# Mock environment variable before importing RAGService if possible, 
+# but RAGService checks os.getenv in __init__.
+os.environ["LLAMA_CLOUD_API_KEY"] = "test_key"
+
 from server.services.rag_service import RAGService
 
 class TestRAGService(unittest.TestCase):
@@ -26,13 +30,10 @@ class TestRAGService(unittest.TestCase):
     @patch('server.services.rag_service.SimpleDirectoryReader')
     @patch('server.services.rag_service.VectorStoreIndex')
     def test_ingestion_fails_without_api_key(self, mock_index, mock_reader, mock_parse):
-        # Ensure LLAMA_CLOUD_API_KEY is NOT set
-        if "LLAMA_CLOUD_API_KEY" in os.environ:
-            del os.environ["LLAMA_CLOUD_API_KEY"]
-            
-        service = RAGService()
-        with self.assertRaises(ValueError):
-            service.ingest_documents("some_dir")
+        # Temporarily remove key to test Fail Fast in __init__
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ValueError):
+                RAGService()
 
 if __name__ == "__main__":
     unittest.main()
