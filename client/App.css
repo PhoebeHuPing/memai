@@ -232,6 +232,31 @@ body {
   text-align: right;
 }
 
+.message-sources {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sources-label {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.source-tag {
+  font-size: 11px;
+  background: #f1f5f9;
+  border: 1px solid var(--border-color);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #475569;
+}
+
 .chat-input-form {
   display: flex;
   gap: 12px;

@@ -1,14 +1,19 @@
 import request from 'superagent'
-import { Message } from '../types/Message'
+import { Message, Source } from '../types/Message'
 
 const rootUrl = '/api/v1'
+
+interface ChatResponse {
+  reply: string
+  sources: Source[]
+}
 
 export async function sendMessage(
   message: string,
   history: Message[],
-): Promise<string> {
+): Promise<ChatResponse> {
   const response = await request
     .post(`${rootUrl}/chat`)
     .send({ message, history })
-  return response.body.reply
+  return { reply: response.body.reply, sources: response.body.sources || [] }
 }

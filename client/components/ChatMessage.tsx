@@ -24,6 +24,16 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             </ReactMarkdown>
           )}
         </div>
+        {!isUser && message.sources && message.sources.length > 0 && (
+          <div className="message-sources">
+            <span className="sources-label">📎 Sources:</span>
+            {message.sources.map((source, i) => (
+              <span key={i} className="source-tag">
+                {source.file} (p.{source.page})
+              </span>
+            ))}
+          </div>
+        )}
         <div className="message-timestamp">
           {new Date(message.timestamp).toLocaleTimeString()}
         </div>

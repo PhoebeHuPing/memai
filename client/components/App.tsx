@@ -1,48 +1,39 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import { Message } from '../../types/Message'
 import { sendMessage } from '../apiClient'
 
-// const queryClient = useQueryClient()
-
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
 
   const mutation = useMutation({
-    mutationFn: async (content: string) => {
-      const reply = await sendMessage(content, messages)
-      return reply
-    },
-
-    onSuccess: (reply) => {
+    mutationFn: (content: string) => sendMessage(content, messages),
+    onSuccess: (data) => {
       const newMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: reply,
+        content: data.reply,
         timestamp: Date.now(),
+        sources: data.sources,
       }
-
       setMessages((prev) => [...prev, newMessage])
     },
   })
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = (content: string) => {
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: content,
+      content,
       timestamp: Date.now(),
     }
     setMessages((prev) => [...prev, userMessage])
     mutation.mutate(content)
   }
 
-  const handleClearChat = () => {
-    setMessages([])
-    console.log('Clear chat clicked')
-  }
+  const handleClearChat = () => setMessages([])
 
   return (
     <div className="app-container">
@@ -57,7 +48,7 @@ export default function App() {
         <div className="messages-container">
           {messages.length === 0 ? (
             <div className="empty-state">
-              <p>Start a conversation with the AI assistant!</p>
+              <p>Ask me about NZ school property management policies!</p>
             </div>
           ) : (
             messages.map((message) => (
