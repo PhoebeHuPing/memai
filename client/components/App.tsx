@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
@@ -7,7 +7,21 @@ import { sendMessage } from '../apiClient'
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
+  useEffect(() => {
+    const stored = localStorage.getItem('memai_messages');
+    if (stored) {
+      try {
+        setMessages(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to parse stored messages', e);
+      }
+    }
+  }, []);
 
+  // Save whenever messages change
+  useEffect(() => {
+    localStorage.setItem('memai_messages', JSON.stringify(messages));
+  }, [messages]);
   const mutation = useMutation({
     mutationFn: (content: string) => sendMessage(content, messages),
     onSuccess: (data) => {
