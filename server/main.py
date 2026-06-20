@@ -16,6 +16,18 @@ if not api_key:
 else:
     client = genai.Client(api_key=api_key)
 
+gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+print(f"Gemini model configured: {gemini_model}")
+
+# Fallback models in case of temporary 429 (quota) or 503 (demand) errors
+fallback_models = []
+if gemini_model:
+    fallback_models.append(gemini_model)
+for model_candidate in ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
+    if model_candidate not in fallback_models:
+        fallback_models.append(model_candidate)
+print(f"Model fallback chain: {fallback_models}")
+
 # Initialize RAG service
 from server.services.rag_service import RAGService
 try:
@@ -90,10 +102,29 @@ async def chat(request: ChatRequest):
 
         contents.append(types.Content(role="user", parts=[types.Part(text=user_content)]))
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=contents,
-        )
+        response = None
+        last_error = None
+        tried_models = []
+
+        for model_name in fallback_models:
+            try:
+                print(f"Attempting to generate content with model: {model_name}")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                )
+                print(f"Successfully generated content with model: {model_name}")
+                break
+            except Exception as e:
+                print(f"Warning: Model {model_name} failed: {e}")
+                last_error = e
+                tried_models.append(model_name)
+
+        if response is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"All attempted models ({', '.join(tried_models)}) failed. Last error: {str(last_error)}"
+            )
 
         return {
             "reply": response.text,
