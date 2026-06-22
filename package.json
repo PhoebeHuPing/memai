@@ -26,6 +26,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.1",
     "superagent": "^10.2.2"
   },
@@ -35,6 +36,7 @@
     "@types/node": "^20.17.17",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "@types/superagent": "^8.1.1",
     "@vitejs/plugin-react": "^5.1.2",
     "eslint": "^8.57.1",

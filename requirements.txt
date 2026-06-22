@@ -8,3 +8,6 @@ llama-index-vector-stores-chroma
 llama-parse
 chromadb
 nest-asyncio
+sqlmodel
+llama-index-embeddings-gemini
+pypdf
