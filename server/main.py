@@ -1,11 +1,17 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
+import time
+import json
+import uuid
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from sqlmodel import Session, select
+from server.database import create_db_and_tables, get_session
+from server.models import ChatMessage as DBMessage
 
 load_dotenv()
 
@@ -39,6 +45,10 @@ except Exception as e:
 
 app = FastAPI()
 
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,12 +76,38 @@ class Message(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    message_id: str
     message: str
     history: List[Message]
+    session_id: str = "default"
+
+
+@app.get("/api/v1/messages")
+def get_messages(session_id: str = "default", db: Session = Depends(get_session)):
+    messages = db.exec(select(DBMessage).where(DBMessage.session_id == session_id).order_by(DBMessage.timestamp)).all()
+    res = []
+    for m in messages:
+        sources_list = json.loads(m.sources) if m.sources else []
+        res.append({
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "timestamp": m.timestamp,
+            "sources": sources_list
+        })
+    return res
+
+@app.delete("/api/v1/messages")
+def clear_messages(session_id: str = "default", db: Session = Depends(get_session)):
+    messages = db.exec(select(DBMessage).where(DBMessage.session_id == session_id)).all()
+    for m in messages:
+        db.delete(m)
+    db.commit()
+    return {"status": "ok"}
 
 
 @app.post("/api/v1/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, db: Session = Depends(get_session)):
     if not client:
         raise HTTPException(status_code=500, detail="API key not configured")
 
@@ -126,7 +162,31 @@ async def chat(request: ChatRequest):
                 detail=f"All attempted models ({', '.join(tried_models)}) failed. Last error: {str(last_error)}"
             )
 
+        # Save user message to DB
+        user_msg = DBMessage(
+            id=request.message_id,
+            session_id=request.session_id,
+            role="user",
+            content=request.message,
+            timestamp=int(time.time() * 1000)
+        )
+        db.add(user_msg)
+
+        # Save bot message to DB
+        bot_id = str(uuid.uuid4())
+        bot_msg = DBMessage(
+            id=bot_id,
+            session_id=request.session_id,
+            role="assistant",
+            content=response.text,
+            timestamp=int(time.time() * 1000) + 1,
+            sources=json.dumps(sources) if sources else None
+        )
+        db.add(bot_msg)
+        db.commit()
+
         return {
+            "id": bot_id,
             "reply": response.text,
             "sources": sources,
         }
