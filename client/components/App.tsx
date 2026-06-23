@@ -1,38 +1,45 @@
 import { useState, useEffect } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import { Message } from '../../types/Message'
-import { sendMessage } from '../apiClient'
+import { sendMessage, getMessages, clearMessages } from '../apiClient'
+
+const SESSION_ID = 'default' // Default session - can be extended for multiple sessions
 
 export default function App() {
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<Message[]>([])
-  useEffect(() => {
-    const stored = localStorage.getItem('memai_messages');
-    if (stored) {
-      try {
-        setMessages(JSON.parse(stored));
-      } catch (e) {
-        console.error('Failed to parse stored messages', e);
-      }
-    }
-  }, []);
 
-  // Save whenever messages change
+  // Load messages from backend on mount
+  const { data: loadedMessages, isLoading } = useQuery({
+    queryKey: ['messages', SESSION_ID],
+    queryFn: () => getMessages(SESSION_ID),
+    staleTime: 0, // Always fetch fresh data
+  })
+
   useEffect(() => {
-    localStorage.setItem('memai_messages', JSON.stringify(messages));
-  }, [messages]);
+    if (loadedMessages) {
+      setMessages(loadedMessages)
+    }
+  }, [loadedMessages])
+
   const mutation = useMutation({
-    mutationFn: (content: string) => sendMessage(content, messages),
+    mutationFn: (content: string) => {
+      const messageId = crypto.randomUUID()
+      return sendMessage(messageId, content, messages, SESSION_ID)
+    },
     onSuccess: (data) => {
       const newMessage: Message = {
-        id: crypto.randomUUID(),
+        id: data.id,
         role: 'assistant',
         content: data.reply,
         timestamp: Date.now(),
         sources: data.sources,
       }
       setMessages((prev) => [...prev, newMessage])
+      // Refetch to ensure sync with backend
+      queryClient.invalidateQueries({ queryKey: ['messages', SESSION_ID] })
     },
   })
 
@@ -47,20 +54,33 @@ export default function App() {
     mutation.mutate(content)
   }
 
-  const handleClearChat = () => setMessages([])
+  const handleClearChat = async () => {
+    await clearMessages(SESSION_ID)
+    setMessages([])
+    queryClient.invalidateQueries({ queryKey: ['messages', SESSION_ID] })
+  }
 
   return (
     <div className="app-container">
       <div className="chat-container">
         <div className="chat-header">
           <h1>MemAI</h1>
-          <button onClick={handleClearChat} className="clear-button">
+          <button onClick={handleClearChat} className="clear-button" disabled={mutation.isPending}>
             Clear Chat
           </button>
         </div>
 
         <div className="messages-container">
-          {messages.length === 0 ? (
+          {isLoading ? (
+            <div className="loading-indicator">
+              <div className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <span>Loading messages...</span>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="empty-state">
               <p>Ask me about NZ school property management policies!</p>
             </div>
