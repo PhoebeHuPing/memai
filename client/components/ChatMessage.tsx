@@ -3,13 +3,20 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Message } from '../../types/Message'
+import { useState } from 'react'
+import toast from 'react-hot-toast'
 
 interface ChatMessageProps {
   message: Message
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export const ChatMessage = ({ message }: ChatMessageProps) => {
   const isUser = message.role === 'user'
+
+  const [showFull, setShowFull] = useState(false)
+
+  const isLong = !isUser && message.content.length > 300
+  const displayedContent = isUser ? message.content : (isLong && !showFull ? message.content.slice(0, 300) + '…' : message.content)
 
   return (
     <div
@@ -26,14 +33,37 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               components={{
                 code({ className, children, ...props }: any) {
                   const match = /language-(\w+)/.exec(className || '')
+                  const codeString = String(children).replace(/\n$/, '')
+                  const copyCode = () => {
+                    navigator.clipboard.writeText(codeString)
+                    toast.success('已复制代码')
+                  }
                   return match ? (
-                    <SyntaxHighlighter
-                      {...props}
-                      children={String(children).replace(/\n$/, '')}
-                      style={vscDarkPlus as any}
-                      language={match[1]}
-                      PreTag="div"
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={copyCode}
+                        style={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          background: 'rgba(0,0,0,0.3)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 4,
+                          padding: '2px 6px',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                        }}
+                        aria-label="复制代码"
+                      >复制</button>
+                      <SyntaxHighlighter
+                        {...props}
+                        children={codeString}
+                        style={vscDarkPlus as any}
+                        language={match[1]}
+                        PreTag="div"
+                      />
+                    </div>
                   ) : (
                     <code {...props} className={className}>
                       {children}
@@ -42,8 +72,15 @@ export default function ChatMessage({ message }: ChatMessageProps) {
                 }
               }}
             >
-              {message.content}
+              {displayedContent}
             </ReactMarkdown>
+          )}
+          {/* 显示折叠/展开按钮 */}
+          {isLong && !showFull && (
+            <button
+              onClick={() => setShowFull(true)}
+              className="show-more-btn"
+            >展开全部</button>
           )}
         </div>
         {!isUser && message.sources && message.sources.length > 0 && (
