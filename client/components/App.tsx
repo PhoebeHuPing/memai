@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react'
+import toast, { Toaster } from 'react-hot-toast'
+
+// ... (rest of imports unchanged) 
+import { sendMessage, getMessages, clearMessages } from '../apiClient'
+
+// existing code continues
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
@@ -29,6 +35,13 @@ export default function App() {
       const messageId = crypto.randomUUID()
       return sendMessage(messageId, content, messages, SESSION_ID)
     },
+    onMutate: () => {
+      toast.loading('AI is thinking...')
+    },
+    onError: (error: any) => {
+      toast.dismiss()
+      toast.error(error?.message ?? '请求出错')
+    },
     onSuccess: (data) => {
       const newMessage: Message = {
         id: data.id,
@@ -40,6 +53,9 @@ export default function App() {
       setMessages((prev) => [...prev, newMessage])
       // Refetch to ensure sync with backend
       queryClient.invalidateQueries({ queryKey: ['messages', SESSION_ID] })
+    },
+    onSettled: () => {
+      toast.dismiss()
     },
   })
 
@@ -62,6 +78,7 @@ export default function App() {
 
   return (
     <div className="app-container">
+      <Toaster position="bottom-right" />
       <div className="chat-container">
         <div className="chat-header">
           <h1>MemAI</h1>
