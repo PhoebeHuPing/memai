@@ -100,3 +100,4 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
     </div>
   )
 }
+export default ChatMessage;

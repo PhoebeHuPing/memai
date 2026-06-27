@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 
-// ... (rest of imports unchanged) 
-import { sendMessage, getMessages, clearMessages } from '../apiClient'
-
 // existing code continues
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
@@ -59,17 +56,17 @@ export default function App() {
     },
   })
 
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   // Apply theme class to root element
   useEffect(() => {
-    const root = document.documentElement;
+    const root = document.documentElement
     if (theme === 'dark') {
-      root.classList.add('dark');
+      root.classList.add('dark')
     } else {
-      root.classList.remove('dark');
+      root.classList.remove('dark')
     }
-  }, [theme]);
+  }, [theme])
   const handleClearChat = async () => {
     await clearMessages(SESSION_ID)
     setMessages([])
@@ -94,12 +91,18 @@ export default function App() {
         <div className="chat-header">
           <h1>MemAI</h1>
           <button
-            onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+            onClick={() =>
+              setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+            }
             className="theme-toggle"
           >
             {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
           </button>
-          <button onClick={handleClearChat} className="clear-button" disabled={mutation.isPending}>
+          <button
+            onClick={handleClearChat}
+            className="clear-button"
+            disabled={mutation.isPending}
+          >
             Clear Chat
           </button>
         </div>
