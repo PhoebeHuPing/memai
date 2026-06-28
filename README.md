@@ -8,19 +8,21 @@ MemAI is not just another chatbot. It's a **Second Brain** powered by Google's G
 
 ## ✨ Key Features
 
-*   **💾 Persistent Memory**: Your conversations aren't lost to a page refresh. MemAI uses intelligent archiving to keep your ideas safe.
-*   **🤖 Gemini 1.5 Flash Powered**: Leverages the latest generative AI for lightning-fast, context-aware responses.
-*   **🐍 FastAPI Backend**: A robust, modern Python infrastructure for handling complex AI logic and history.
-*   **⚛️ Modern React UI**: A clean, distraction-free interface built for deep thinking and easy navigation.
-*   **🛡️ Type-Safe Architecture**: Full TypeScript integration from frontend to API types.
+*   **💾 Persistent Memory**: Chats are saved both in LocalStorage and a SQLite database via SQLModel, ensuring durability across devices.
+*   **🤖 Gemini 1.5 Flash Powered**: Uses Gemini 1.5/2.5 flash models with automatic fallback chain for reliability.
+*   **🗂️ RAG Context Retrieval**: Chromadb-powered Retrieval‑Augmented Generation provides policy document context.
+*   **🐍 FastAPI Backend**: A robust, modern Python infrastructure with async support and structured DB models.
+*   **⚛️ Modern React UI**: A clean, distraction‑free interface built for deep thinking and easy navigation.
+*   **🛡️ Type‑Safe Architecture**: Full TypeScript integration from frontend to API types.
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: [React 18](https://reactjs.org/), [TypeScript](https://www.typescriptlang.org/), [Vite](https://vitejs.dev/), [TanStack Query](https://tanstack.com/query/latest)
-- **Backend**: [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/), [Pydantic](https://docs.pydantic.dev/)
+- **Backend**: [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/), [Pydantic](https://docs.pydantic.dev/), [SQLModel (SQLite)](https://sqlmodel.tiangolo.com/)
 - **AI Engine**: [Google Gemini AI](https://ai.google.dev/) via `google-genai` SDK
+- **RAG**: [Chromadb](https://www.trychroma.com/) for vectorstore retrieval
 - **Styling**: Modern Vanilla CSS with a focus on responsiveness
 
 ---
@@ -74,25 +76,30 @@ npm run dev
 
 ```text
 memai/
-├── client/           # React + TypeScript Frontend
-│   ├── components/   # UI Components (App, Input, Message)
-│   └── apiClient.ts  # API communication logic
-├── server/           # Python + FastAPI Backend
-│   └── main.py       # Main API routes and Gemini integration
-├── types/            # Shared TypeScript interfaces
-├── index.html        # Entry HTML
-└── README.md         # You are here!
+├── client/                     # React + TypeScript Frontend
+│   ├── components/             # UI Components (App, Input, Message)
+│   └── apiClient.ts            # API communication logic
+├── server/                     # Python + FastAPI Backend
+│   ├── main.py                 # API routes, Gemini integration
+│   ├── database.py             # SQLite/SQLModel setup
+│   ├── models.py               # DB ORM models
+│   └── services/
+│       └── rag_service.py      # Chromadb RAG implementation
+├── types/                      # Shared TypeScript interfaces
+├── index.html                  # Entry HTML
+└── README.md                   # You are here!
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] **Phase 1**: Implement LocalStorage persistence in the frontend.
-- [ ] **Phase 2**: Add Markdown support and Syntax Highlighting for code.
-- [ ] **Phase 3**: Integrate SQLite for server-side permanent storage.
-- [ ] **Phase 4**: Add AI Personas (e.g., Researcher, Coder, Writer).
-- [ ] **Phase 5**: Semantic Search across chat history.
+- [x] **Phase 1**: LocalStorage persistence (frontend) **and** backend SQLite storage via SQLModel.
+- [x] **Phase 2**: Markdown rendering with syntax highlighting for code snippets.
+- [x] **Phase 3**: SQLite integration completed; DB schema in `server/models.py`.
+- [ ] **Phase 4**: AI Personas (e.g., Researcher, Coder, Writer).
+- [ ] **Phase 5**: Semantic Search across chat history (future RAG enhancements).
+- [ ] **Phase 6**: Retrieval‑Augmented Generation using Chromadb for policy‑document context.
 
 ---
 
