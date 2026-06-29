@@ -37,7 +37,7 @@ export default function App() {
     },
     onError: (error: any) => {
       toast.dismiss()
-      toast.error(error?.message ?? '请求出错')
+      toast.error(error?.message ?? 'Request failed')
     },
     onSuccess: (data) => {
       const newMessage: Message = {

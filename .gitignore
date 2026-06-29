@@ -2,8 +2,15 @@
 logs
 *.log
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -13,6 +20,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite/
 *.local
 
 # Editor directories and files
@@ -28,7 +36,12 @@ dist-ssr
 
 # Environment variables
 .env
+.env.*
+!.env.sample
 .venv
+.venv/
+venv/
+env/
 
 # BMad System Files
 _bmad/
@@ -39,3 +52,7 @@ _bmad-output/
 
 # Local Data and Persistence
 server/data/
+*.db
+*.sqlite
+*.sqlite3
+chroma_db/

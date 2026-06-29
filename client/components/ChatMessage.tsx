@@ -36,7 +36,7 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                   const codeString = String(children).replace(/\n$/, '')
                   const copyCode = () => {
                     navigator.clipboard.writeText(codeString)
-                    toast.success('已复制代码')
+                    toast.success('Code copied')
                   }
                   return match ? (
                     <div style={{ position: 'relative' }}>
@@ -54,8 +54,8 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                           cursor: 'pointer',
                           fontSize: '0.75rem',
                         }}
-                        aria-label="复制代码"
-                      >复制</button>
+                        aria-label="Copy code"
+                      >Copy</button>
                       <SyntaxHighlighter
                         {...props}
                         children={codeString}
@@ -75,12 +75,12 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
               {displayedContent}
             </ReactMarkdown>
           )}
-          {/* 显示折叠/展开按钮 */}
+          {/* Show collapsed/expanded content control */}
           {isLong && !showFull && (
             <button
               onClick={() => setShowFull(true)}
               className="show-more-btn"
-            >展开全部</button>
+            >Show full response</button>
           )}
         </div>
         {!isUser && message.sources && message.sources.length > 0 && (
