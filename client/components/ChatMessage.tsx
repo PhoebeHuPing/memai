@@ -16,11 +16,6 @@ interface ChatMessageProps {
 const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Cleanup stray label elements from previous renders (StrictMode double rendering)
-  useEffect(() => {
-    const labels = document.querySelectorAll('.message-role-label');
-    labels.forEach(label => label.remove());
-  }, []);
 
 
 
