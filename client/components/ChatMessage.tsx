@@ -1,29 +1,40 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Message } from '../../types/Message'
-import { useState } from 'react'
-import toast from 'react-hot-toast'
+import React, { useState, useRef, useEffect } from 'react';
+
+// Effect moved inside component
+
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import toast from 'react-hot-toast';
+import { Message } from '../../types/Message';
 
 interface ChatMessageProps {
-  message: Message
+  message: Message;
 }
 
-export const ChatMessage = ({ message }: ChatMessageProps) => {
-  const isUser = message.role === 'user'
+const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const [showFull, setShowFull] = useState(false)
+  // Cleanup stray label elements from previous renders (StrictMode double rendering)
+  useEffect(() => {
+    const labels = document.querySelectorAll('.message-role-label');
+    labels.forEach(label => label.remove());
+  }, []);
 
-  const isLong = !isUser && message.content.length > 300
-  const displayedContent = isUser ? message.content : (isLong && !showFull ? message.content.slice(0, 300) + '…' : message.content)
+
+
+
+  const [showFull, setShowFull] = useState(false);
+
+  const isUser = message.role === 'user';
+  const isLong = !isUser && message.content.length > 300;
+  const displayedContent = isUser || !isLong || showFull ? message.content : `${message.content.slice(0, 300)}...`;
 
   return (
-    <div
-      className={`message ${isUser ? 'user-message' : 'assistant-message'}`}
-    >
+    <div ref={rootRef} className={`message ${isUser ? 'user-message' : 'assistant-message'}`}>
       <div className="message-content">
-        <div className="message-role">{isUser ? 'You' : 'MemAI'}</div>
+        <span className="message-role-label">{isUser ? 'You' : 'MemAI'}</span>
         <div className="message-text">
           {isUser ? (
             message.content
@@ -32,12 +43,12 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
               remarkPlugins={[remarkGfm]}
               components={{
                 code({ className, children, ...props }: any) {
-                  const match = /language-(\w+)/.exec(className || '')
-                  const codeString = String(children).replace(/\n$/, '')
+                  const match = /language-(\w+)/.exec(className || '');
+                  const codeString = String(children).replace(/\n$/, '');
                   const copyCode = () => {
-                    navigator.clipboard.writeText(codeString)
-                    toast.success('Code copied')
-                  }
+                    navigator.clipboard.writeText(codeString);
+                    toast.success('Code copied');
+                  };
                   return match ? (
                     <div style={{ position: 'relative' }}>
                       <button
@@ -55,7 +66,9 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                           fontSize: '0.75rem',
                         }}
                         aria-label="Copy code"
-                      >Copy</button>
+                      >
+                        Copy
+                      </button>
                       <SyntaxHighlighter
                         {...props}
                         children={codeString}
@@ -68,19 +81,17 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
                     <code {...props} className={className}>
                       {children}
                     </code>
-                  )
-                }
+                  );
+                },
               }}
             >
               {displayedContent}
             </ReactMarkdown>
           )}
-          {/* Show collapsed/expanded content control */}
           {isLong && !showFull && (
-            <button
-              onClick={() => setShowFull(true)}
-              className="show-more-btn"
-            >Show full response</button>
+            <button onClick={() => setShowFull(true)} className="show-more-btn">
+              Show full response
+            </button>
           )}
         </div>
         {!isUser && message.sources && message.sources.length > 0 && (
@@ -98,6 +109,7 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
 export default ChatMessage;

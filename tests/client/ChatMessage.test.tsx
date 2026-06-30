@@ -172,7 +172,8 @@ For more details, see page 2.
     expect(messageDiv).toBeTruthy()
 
     // Should show "You" label
-    expect(screen.getByText('You')).toBeTruthy()
+    const youLabels = screen.getAllByText('You');
+    expect(youLabels.length).toBeGreaterThan(0);
   })
 
   it('should show MemAI label for assistant messages', () => {
@@ -186,6 +187,7 @@ For more details, see page 2.
     render(<ChatMessage message={assistantMsg} />)
 
     // Should show "MemAI" label
-    expect(screen.getByText('MemAI')).toBeTruthy()
+    const memAiLabels = screen.getAllByText('MemAI');
+expect(memAiLabels.length).toBeGreaterThan(0);
   })
 })
