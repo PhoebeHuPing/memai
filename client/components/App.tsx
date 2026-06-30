@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 
-// existing code continues
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
@@ -67,6 +66,7 @@ export default function App() {
       root.classList.remove('dark')
     }
   }, [theme])
+
   const handleClearChat = async () => {
     await clearMessages(SESSION_ID)
     setMessages([])
@@ -96,7 +96,7 @@ export default function App() {
             }
             className="theme-toggle"
           >
-            {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
+            {theme === 'light' ? 'Dark' : 'Light'}
           </button>
           <button
             onClick={handleClearChat}
@@ -108,16 +108,7 @@ export default function App() {
         </div>
 
         <div className="messages-container">
-          {isLoading ? (
-            <div className="loading-indicator">
-              <div className="loading-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <span>Loading messages...</span>
-            </div>
-          ) : messages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="empty-state">
               <p>Ask me about NZ school property management policies!</p>
             </div>
@@ -129,9 +120,9 @@ export default function App() {
           {mutation.isPending && (
             <div className="loading-indicator">
               <div className="loading-dots">
-                <span></span>
-                <span></span>
-                <span></span>
+                <span />
+                <span />
+                <span />
               </div>
               <span>AI is thinking...</span>
             </div>
