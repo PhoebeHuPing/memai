@@ -11,7 +11,7 @@ from google.genai import types
 from dotenv import load_dotenv
 from sqlmodel import Session, select
 from server.database import create_db_and_tables, get_session
-from server.models import ChatMessage as DBMessage
+from server.models import ChatMessage as DBMessage, ChatSession
 
 load_dotenv()
 
@@ -82,9 +82,13 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+class RenameSessionRequest(BaseModel):
+    title: str
+
+
 @app.get("/api/v1/sessions")
 def list_sessions(db: Session = Depends(get_session)):
-    """Return all session IDs with their last activity timestamp and preview."""
+    """Return all session IDs with their last activity timestamp and title."""
     from sqlalchemy import func
     results = db.exec(
         select(DBMessage.session_id, func.max(DBMessage.timestamp).label("last_active"))
@@ -93,19 +97,58 @@ def list_sessions(db: Session = Depends(get_session)):
     ).all()
     sessions = []
     for session_id, last_active in results:
-        # Get the first user message as preview/title
-        first_msg = db.exec(
-            select(DBMessage)
-            .where(DBMessage.session_id == session_id, DBMessage.role == "user")
-            .order_by(DBMessage.timestamp)
-        ).first()
-        title = first_msg.content[:40] if first_msg else "New Chat"
+        # Check if there's a custom title in the sessions table
+        chat_session = db.get(ChatSession, session_id)
+        if chat_session and chat_session.title:
+            title = chat_session.title
+        else:
+            # Fallback: first user message as title
+            first_msg = db.exec(
+                select(DBMessage)
+                .where(DBMessage.session_id == session_id, DBMessage.role == "user")
+                .order_by(DBMessage.timestamp)
+            ).first()
+            title = first_msg.content[:40] if first_msg else "New Chat"
         sessions.append({
             "session_id": session_id,
             "title": title,
             "last_active": last_active,
         })
     return sessions
+
+
+@app.patch("/api/v1/sessions/{session_id}")
+def rename_session(session_id: str, request: RenameSessionRequest, db: Session = Depends(get_session)):
+    """Rename a session. Creates a ChatSession record if it doesn't exist."""
+    chat_session = db.get(ChatSession, session_id)
+    if chat_session:
+        chat_session.title = request.title
+    else:
+        # Verify session has messages
+        msg = db.exec(select(DBMessage).where(DBMessage.session_id == session_id)).first()
+        if not msg:
+            raise HTTPException(status_code=404, detail="Session not found")
+        chat_session = ChatSession(id=session_id, title=request.title, created_at=int(time.time() * 1000))
+        db.add(chat_session)
+    db.commit()
+    return {"status": "ok", "session_id": session_id, "title": request.title}
+
+
+@app.delete("/api/v1/sessions/{session_id}")
+def delete_session(session_id: str, db: Session = Depends(get_session)):
+    """Delete a session and all its messages."""
+    # Delete all messages for this session
+    messages = db.exec(select(DBMessage).where(DBMessage.session_id == session_id)).all()
+    if not messages:
+        raise HTTPException(status_code=404, detail="Session not found")
+    for m in messages:
+        db.delete(m)
+    # Delete session record if exists
+    chat_session = db.get(ChatSession, session_id)
+    if chat_session:
+        db.delete(chat_session)
+    db.commit()
+    return {"status": "ok"}
 
 
 @app.get("/api/v1/messages")
