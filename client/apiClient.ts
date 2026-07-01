@@ -9,6 +9,17 @@ interface ChatResponse {
   sources: Source[]
 }
 
+export interface SessionInfo {
+  session_id: string
+  title: string
+  last_active: number
+}
+
+export async function getSessions(): Promise<SessionInfo[]> {
+  const response = await request.get(`${rootUrl}/sessions`)
+  return response.body
+}
+
 export async function getMessages(sessionId: string = 'default'): Promise<Message[]> {
   const response = await request.get(`${rootUrl}/messages`).query({ session_id: sessionId })
   return response.body

@@ -82,6 +82,32 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+@app.get("/api/v1/sessions")
+def list_sessions(db: Session = Depends(get_session)):
+    """Return all session IDs with their last activity timestamp and preview."""
+    from sqlalchemy import func
+    results = db.exec(
+        select(DBMessage.session_id, func.max(DBMessage.timestamp).label("last_active"))
+        .group_by(DBMessage.session_id)
+        .order_by(func.max(DBMessage.timestamp).desc())
+    ).all()
+    sessions = []
+    for session_id, last_active in results:
+        # Get the first user message as preview/title
+        first_msg = db.exec(
+            select(DBMessage)
+            .where(DBMessage.session_id == session_id, DBMessage.role == "user")
+            .order_by(DBMessage.timestamp)
+        ).first()
+        title = first_msg.content[:40] if first_msg else "New Chat"
+        sessions.append({
+            "session_id": session_id,
+            "title": title,
+            "last_active": last_active,
+        })
+    return sessions
+
+
 @app.get("/api/v1/messages")
 def get_messages(session_id: str = "default", db: Session = Depends(get_session)):
     messages = db.exec(select(DBMessage).where(DBMessage.session_id == session_id).order_by(DBMessage.timestamp)).all()
