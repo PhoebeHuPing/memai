@@ -4,20 +4,20 @@ import toast, { Toaster } from 'react-hot-toast'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
+import SessionSidebar from './SessionSidebar'
 import { Message } from '../../types/Message'
 import { sendMessage, getMessages, clearMessages } from '../apiClient'
 
-const SESSION_ID = 'default' // Default session - can be extended for multiple sessions
-
 export default function App() {
   const queryClient = useQueryClient()
+  const [sessionId, setSessionId] = useState<string>('default')
   const [messages, setMessages] = useState<Message[]>([])
 
-  // Load messages from backend on mount
-  const { data: loadedMessages, isLoading } = useQuery({
-    queryKey: ['messages', SESSION_ID],
-    queryFn: () => getMessages(SESSION_ID),
-    staleTime: 0, // Always fetch fresh data
+  // Load messages for the current session
+  const { data: loadedMessages } = useQuery({
+    queryKey: ['messages', sessionId],
+    queryFn: () => getMessages(sessionId),
+    staleTime: 0,
   })
 
   useEffect(() => {
@@ -26,10 +26,22 @@ export default function App() {
     }
   }, [loadedMessages])
 
+  // Reset messages when switching sessions
+  const handleSelectSession = (newSessionId: string) => {
+    setSessionId(newSessionId)
+    setMessages([]) // Clear immediately, useQuery will reload
+  }
+
+  const handleNewSession = () => {
+    const newId = crypto.randomUUID()
+    setSessionId(newId)
+    setMessages([])
+  }
+
   const mutation = useMutation({
     mutationFn: (content: string) => {
       const messageId = crypto.randomUUID()
-      return sendMessage(messageId, content, messages, SESSION_ID)
+      return sendMessage(messageId, content, messages, sessionId)
     },
     onMutate: () => {
       toast.loading('AI is thinking...')
@@ -47,8 +59,9 @@ export default function App() {
         sources: data.sources,
       }
       setMessages((prev) => [...prev, newMessage])
-      // Refetch to ensure sync with backend
-      queryClient.invalidateQueries({ queryKey: ['messages', SESSION_ID] })
+      queryClient.invalidateQueries({ queryKey: ['messages', sessionId] })
+      // Refresh session list so the new session appears
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
     onSettled: () => {
       toast.dismiss()
@@ -57,7 +70,6 @@ export default function App() {
 
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
-  // Apply theme class to root element
   useEffect(() => {
     const root = document.documentElement
     if (theme === 'dark') {
@@ -68,9 +80,10 @@ export default function App() {
   }, [theme])
 
   const handleClearChat = async () => {
-    await clearMessages(SESSION_ID)
+    await clearMessages(sessionId)
     setMessages([])
-    queryClient.invalidateQueries({ queryKey: ['messages', SESSION_ID] })
+    queryClient.invalidateQueries({ queryKey: ['messages', sessionId] })
+    queryClient.invalidateQueries({ queryKey: ['sessions'] })
   }
 
   const handleSendMessage = (content: string) => {
@@ -87,6 +100,11 @@ export default function App() {
   return (
     <div className="app-container">
       <Toaster position="bottom-right" />
+      <SessionSidebar
+        currentSessionId={sessionId}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+      />
       <div className="chat-container">
         <div className="chat-header">
           <h1>MemAI</h1>
