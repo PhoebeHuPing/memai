@@ -502,3 +502,60 @@ body {
     height: 70vh;
   }
 }
+
+/* Session item row with actions */
+.session-row {
+  display: flex;
+  align-items: center;
+}
+
+.session-row .session-button {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-actions {
+  display: none;
+  gap: 2px;
+  padding-right: 8px;
+}
+
+.session-item:hover .session-actions {
+  display: flex;
+}
+
+.session-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  transition: background-color 0.15s;
+}
+
+.session-action-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.session-action-delete:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* Inline rename editing */
+.session-edit {
+  padding: 8px 14px;
+}
+
+.session-edit-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--primary-color);
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  background: var(--white);
+  color: var(--text-color);
+  box-shadow: 0 0 0 2px rgba(9, 85, 156, 0.15);
+}

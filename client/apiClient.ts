@@ -45,3 +45,11 @@ export async function sendMessage(
     })
   return { id: response.body.id, reply: response.body.reply, sources: response.body.sources || [] }
 }
+
+export async function renameSession(sessionId: string, title: string): Promise<void> {
+  await request.patch(`${rootUrl}/sessions/${sessionId}`).send({ title })
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await request.delete(`${rootUrl}/sessions/${sessionId}`)
+}

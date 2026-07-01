@@ -86,6 +86,13 @@ export default function App() {
     queryClient.invalidateQueries({ queryKey: ['sessions'] })
   }
 
+  const handleSessionDeleted = (deletedSessionId: string) => {
+    if (deletedSessionId === sessionId) {
+      // Deleted the current session — switch to a new one
+      handleNewSession()
+    }
+  }
+
   const handleSendMessage = (content: string) => {
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -104,6 +111,7 @@ export default function App() {
         currentSessionId={sessionId}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
+        onSessionDeleted={handleSessionDeleted}
       />
       <div className="chat-container">
         <div className="chat-header">
