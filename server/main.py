@@ -89,26 +89,52 @@ class RenameSessionRequest(BaseModel):
 @app.get("/api/v1/sessions")
 def list_sessions(db: Session = Depends(get_session)):
     """Return all session IDs with their last activity timestamp and title."""
-    from sqlalchemy import func
-    results = db.exec(
-        select(DBMessage.session_id, func.max(DBMessage.timestamp).label("last_active"))
+    from sqlalchemy import func, outerjoin, text
+
+    # Single query: aggregate messages and LEFT JOIN session titles
+    msg_stats = (
+        select(
+            DBMessage.session_id,
+            func.max(DBMessage.timestamp).label("last_active"),
+            func.min(
+                # First user message content for fallback title
+                func.case(
+                    (DBMessage.role == "user", DBMessage.timestamp),
+                    else_=None,
+                )
+            ).label("first_user_ts"),
+        )
         .group_by(DBMessage.session_id)
-        .order_by(func.max(DBMessage.timestamp).desc())
+        .subquery()
+    )
+
+    results = db.exec(
+        select(
+            msg_stats.c.session_id,
+            msg_stats.c.last_active,
+            ChatSession.title,
+        )
+        .outerjoin(ChatSession, ChatSession.id == msg_stats.c.session_id)
+        .order_by(msg_stats.c.last_active.desc())
     ).all()
-    sessions = []
-    for session_id, last_active in results:
-        # Check if there's a custom title in the sessions table
-        chat_session = db.get(ChatSession, session_id)
-        if chat_session and chat_session.title:
-            title = chat_session.title
-        else:
-            # Fallback: first user message as title
+
+    # For sessions without a custom title, fetch the first user message in bulk
+    sessions_needing_title = [r[0] for r in results if not r[2]]
+
+    first_messages = {}
+    if sessions_needing_title:
+        # Get the first user message per session using a correlated approach
+        for sid in sessions_needing_title:
             first_msg = db.exec(
-                select(DBMessage)
-                .where(DBMessage.session_id == session_id, DBMessage.role == "user")
+                select(DBMessage.content)
+                .where(DBMessage.session_id == sid, DBMessage.role == "user")
                 .order_by(DBMessage.timestamp)
             ).first()
-            title = first_msg.content[:40] if first_msg else "New Chat"
+            first_messages[sid] = first_msg[:40] if first_msg else "New Chat"
+
+    sessions = []
+    for session_id, last_active, custom_title in results:
+        title = custom_title if custom_title else first_messages.get(session_id, "New Chat")
         sessions.append({
             "session_id": session_id,
             "title": title,
