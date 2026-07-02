@@ -176,7 +176,7 @@ def clear_messages(session_id: str = "default", db: Session = Depends(get_sessio
 
 
 @app.post("/api/v1/chat")
-async def chat(request: ChatRequest, db: Session = Depends(get_session)):
+def chat(request: ChatRequest, db: Session = Depends(get_session)):
     if not client:
         raise HTTPException(status_code=500, detail="API key not configured")
 
