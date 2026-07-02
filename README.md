@@ -9,10 +9,10 @@ The current application is optimized for Ministry of Education (MOE) property-ma
 - **Policy-grounded chat**: Answers are generated with retrieved context from ingested MOE policy PDFs.
 - **Source references**: Assistant responses can include document names, page numbers, and retrieval scores.
 - **Persistent chat history**: Messages are stored in SQLite through SQLModel and reloaded on app start.
-- **Session-aware API**: Backend endpoints support a `session_id`, so message histories can be isolated.
+- **Multi-session management**: Create, switch, rename, and delete chat sessions from a sidebar. Each session maintains its own message history.
 - **Gemini model fallback**: The backend tries the configured Gemini model first, then falls back through a small model chain if generation fails.
 - **Markdown responses**: Assistant messages support GitHub-flavored Markdown and syntax-highlighted code blocks.
-- **Simple chat UI**: React frontend includes loading states, clear-chat behavior, source tags, and light/dark theme switching.
+- **Chat UI**: React frontend includes a session sidebar, loading states, clear-chat behavior, source tags, and light/dark theme switching.
 
 ## Tech Stack
 
@@ -51,6 +51,7 @@ ai-chatbot/
 |       +-- App.tsx               # Main chat screen
 |       +-- ChatInput.tsx         # Message input form
 |       +-- ChatMessage.tsx       # Message rendering, Markdown, sources
+|       +-- SessionSidebar.tsx    # Multi-session sidebar (create, rename, delete)
 +-- server/
 |   +-- main.py                   # FastAPI app, Gemini integration, chat routes
 |   +-- database.py               # SQLite/SQLModel setup
@@ -132,6 +133,30 @@ Local services:
 The Vite dev server proxies `/api` requests to the backend.
 
 ## API Overview
+
+### `GET /api/v1/sessions`
+
+Returns all chat sessions ordered by last activity.
+
+Response body:
+
+```json
+[
+  {
+    "session_id": "abc123",
+    "title": "5YA Process Questions",
+    "last_active": 1719900000
+  }
+]
+```
+
+### `PATCH /api/v1/sessions/{session_id}`
+
+Renames a session.
+
+### `DELETE /api/v1/sessions/{session_id}`
+
+Deletes a session and all its messages.
 
 ### `GET /api/v1/messages`
 
@@ -218,7 +243,6 @@ python -m pytest tests/server
 
 ## Current Notes
 
-- The app currently uses a single frontend session ID: `default`.
 - The backend allows all CORS origins for development.
 - RAG initialization requires `GOOGLE_GENERATIVE_AI_API_KEY` because Gemini embeddings are used.
 - The included PDF and vector store are development/demo data.
