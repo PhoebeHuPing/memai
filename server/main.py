@@ -5,7 +5,8 @@ import json
 import uuid
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field as PydanticField
+from pydantic import field_validator
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -71,19 +72,26 @@ Rules:
 class Message(BaseModel):
     id: Optional[str] = None
     role: str
-    content: str
+    content: str = PydanticField(max_length=50000)
     timestamp: Optional[int] = None
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in ("user", "assistant"):
+            raise ValueError("role must be 'user' or 'assistant'")
+        return v
 
 
 class ChatRequest(BaseModel):
-    message_id: str
-    message: str
-    history: List[Message]
-    session_id: str = "default"
+    message_id: str = PydanticField(max_length=100)
+    message: str = PydanticField(min_length=1, max_length=10000)
+    history: List[Message] = PydanticField(default=[], max_length=100)
+    session_id: str = PydanticField(default="default", min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_\-]+$")
 
 
 class RenameSessionRequest(BaseModel):
-    title: str
+    title: str = PydanticField(min_length=1, max_length=60)
 
 
 @app.get("/api/v1/sessions")
