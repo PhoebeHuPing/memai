@@ -1,9 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { sendMessage, getMessages, clearMessages } from '../../client/apiClient'
+import { sendMessage, getMessages, clearMessages, parseApiError } from '../../client/apiClient'
 import request from 'superagent'
 import { Message } from '../../types/Message'
 
 vi.mock('superagent')
+
+/** Helper to create a chainable mock that ends with .timeout() */
+function mockChain(resolvedValue: any) {
+  const chain: any = {}
+  chain.send = vi.fn().mockReturnValue(chain)
+  chain.query = vi.fn().mockReturnValue(chain)
+  chain.timeout = vi.fn().mockResolvedValue(resolvedValue)
+  return chain
+}
+
+function mockChainRejected(error: any) {
+  const chain: any = {}
+  chain.send = vi.fn().mockReturnValue(chain)
+  chain.query = vi.fn().mockReturnValue(chain)
+  chain.timeout = vi.fn().mockRejectedValue(error)
+  return chain
+}
 
 describe('sendMessage', () => {
   beforeEach(() => {
@@ -13,15 +30,15 @@ describe('sendMessage', () => {
   it('should send a message and return the AI reply with sources', async () => {
     const mockReply = 'Based on MOE policy...'
     const mockSources = [{ file: 'policy.pdf', page: '1', score: 0.95 }]
-    vi.mocked(request.post).mockReturnValue({
-      send: vi.fn().mockResolvedValue({
-        body: {
-          id: 'msg-123',
-          reply: mockReply,
-          sources: mockSources,
-        },
-      }),
-    } as any)
+    const chain = mockChain({
+      body: {
+        id: 'msg-123',
+        reply: mockReply,
+        sources: mockSources,
+        no_context: false,
+      },
+    })
+    vi.mocked(request.post).mockReturnValue(chain)
 
     const result = await sendMessage(
       'msg-001',
@@ -32,21 +49,21 @@ describe('sendMessage', () => {
 
     expect(result.reply).toBe(mockReply)
     expect(result.sources).toEqual(mockSources)
+    expect(result.no_context).toBe(false)
     expect(request.post).toHaveBeenCalledWith('/api/v1/chat')
   })
 
   it('should send conversation history with the message', async () => {
     const mockReply = 'That sounds like a Priority 2 issue!'
-    const sendMock = vi.fn().mockResolvedValue({
+    const chain = mockChain({
       body: {
         id: 'msg-124',
         reply: mockReply,
         sources: [],
+        no_context: false,
       },
     })
-    vi.mocked(request.post).mockReturnValue({
-      send: sendMock,
-    } as any)
+    vi.mocked(request.post).mockReturnValue(chain)
 
     const history: Message[] = [
       {
@@ -68,7 +85,7 @@ describe('sendMessage', () => {
 
     expect(result.reply).toBe(mockReply)
     expect(request.post).toHaveBeenCalledWith('/api/v1/chat')
-    expect(sendMock).toHaveBeenCalledWith({
+    expect(chain.send).toHaveBeenCalledWith({
       message_id: 'msg-125',
       message,
       history,
@@ -82,15 +99,15 @@ describe('sendMessage', () => {
       { file: 'policy2.pdf', page: '5', score: 0.88 },
       { file: 'guide.pdf', page: '10', score: 0.82 },
     ]
-    vi.mocked(request.post).mockReturnValue({
-      send: vi.fn().mockResolvedValue({
-        body: {
-          id: 'msg-126',
-          reply: 'Multi-source answer',
-          sources: mockSources,
-        },
-      }),
-    } as any)
+    const chain = mockChain({
+      body: {
+        id: 'msg-126',
+        reply: 'Multi-source answer',
+        sources: mockSources,
+        no_context: false,
+      },
+    })
+    vi.mocked(request.post).mockReturnValue(chain)
 
     const result = await sendMessage(
       'msg-127',
@@ -103,13 +120,64 @@ describe('sendMessage', () => {
     expect(result.sources[0].score).toBe(0.95)
   })
 
+  it('should return no_context=true when no documents found', async () => {
+    const chain = mockChain({
+      body: {
+        id: 'msg-130',
+        reply: 'I could not find relevant context...',
+        sources: [],
+        no_context: true,
+      },
+    })
+    vi.mocked(request.post).mockReturnValue(chain)
+
+    const result = await sendMessage('msg-130', 'random question', [], 'default')
+
+    expect(result.no_context).toBe(true)
+    expect(result.sources).toEqual([])
+  })
+
+  it('should return warning when DB persistence fails', async () => {
+    const chain = mockChain({
+      body: {
+        id: 'msg-131',
+        reply: 'Generated answer',
+        sources: [],
+        no_context: false,
+        warning: 'Message generated but could not be saved to history.',
+      },
+    })
+    vi.mocked(request.post).mockReturnValue(chain)
+
+    const result = await sendMessage('msg-131', 'test', [], 'default')
+
+    expect(result.warning).toBe('Message generated but could not be saved to history.')
+  })
+
   it('should handle errors appropriately', async () => {
-    vi.mocked(request.post).mockReturnValue({
-      send: vi.fn().mockRejectedValue(new Error('Network error')),
-    } as any)
+    const chain = mockChainRejected(new Error('Network error'))
+    vi.mocked(request.post).mockReturnValue(chain)
 
     await expect(sendMessage('msg-128', 'test', [], 'default')).rejects.toThrow(
       'Network error',
+    )
+  })
+
+  it('should set timeout on requests', async () => {
+    const chain = mockChain({
+      body: {
+        id: 'msg-129',
+        reply: 'reply',
+        sources: [],
+        no_context: false,
+      },
+    })
+    vi.mocked(request.post).mockReturnValue(chain)
+
+    await sendMessage('msg-129', 'test', [], 'default')
+
+    expect(chain.timeout).toHaveBeenCalledWith(
+      expect.objectContaining({ response: expect.any(Number), deadline: expect.any(Number) }),
     )
   })
 })
@@ -136,10 +204,8 @@ describe('getMessages', () => {
       },
     ]
 
-    const mockResponse = { body: mockMessages }
-    vi.mocked(request.get).mockReturnValue({
-      query: vi.fn().mockResolvedValue(mockResponse),
-    } as any)
+    const chain = mockChain({ body: mockMessages })
+    vi.mocked(request.get).mockReturnValue(chain)
 
     const result = await getMessages('default')
 
@@ -150,11 +216,8 @@ describe('getMessages', () => {
   })
 
   it('should handle empty message list', async () => {
-    vi.mocked(request.get).mockReturnValue({
-      query: vi.fn().mockResolvedValue({
-        body: [],
-      }),
-    } as any)
+    const chain = mockChain({ body: [] })
+    vi.mocked(request.get).mockReturnValue(chain)
 
     const result = await getMessages('empty-session')
 
@@ -176,23 +239,18 @@ describe('getMessages', () => {
       },
     ]
 
-    vi.mocked(request.get).mockReturnValue({
-      query: vi.fn().mockResolvedValue({
-        body: mockMessages,
-      }),
-    } as any)
+    const chain = mockChain({ body: mockMessages })
+    vi.mocked(request.get).mockReturnValue(chain)
 
     const result = await getMessages('multi-source-session')
 
     expect(result[0].sources).toHaveLength(3)
-    expect(result[0].sources.map((s) => s.file)).toContain('policy1.pdf')
+    expect(result[0].sources!.map((s) => s.file)).toContain('policy1.pdf')
   })
 
   it('should handle fetch errors', async () => {
-    const mockError = new Error('Fetch failed')
-    vi.mocked(request.get).mockReturnValue({
-      query: vi.fn().mockRejectedValue(mockError),
-    } as any)
+    const chain = mockChainRejected(new Error('Fetch failed'))
+    vi.mocked(request.get).mockReturnValue(chain)
 
     await expect(getMessages('error-session')).rejects.toThrow('Fetch failed')
   })
@@ -204,17 +262,11 @@ describe('clearMessages', () => {
   })
 
   it('should clear messages for a session', async () => {
-    vi.mocked(request.delete).mockReturnValue({
-      query: vi.fn().mockReturnValue({
-        end: vi.fn().mockResolvedValue({
-          body: { status: 'ok' },
-        }),
-      }),
-    } as any)
+    const chain = mockChain({ body: { status: 'ok' } })
+    vi.mocked(request.delete).mockReturnValue(chain)
 
     const result = await clearMessages('default')
 
-    // clearMessages returns void, but the call should succeed
     expect(result).toBeUndefined()
     expect(request.delete).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/messages'),
@@ -222,13 +274,8 @@ describe('clearMessages', () => {
   })
 
   it('should clear different sessions independently', async () => {
-    vi.mocked(request.delete).mockReturnValue({
-      query: vi.fn().mockReturnValue({
-        end: vi.fn().mockResolvedValue({
-          body: { status: 'ok' },
-        }),
-      }),
-    } as any)
+    const chain = mockChain({ body: { status: 'ok' } })
+    vi.mocked(request.delete).mockReturnValue(chain)
 
     await clearMessages('session-1')
     await clearMessages('session-2')
@@ -237,18 +284,53 @@ describe('clearMessages', () => {
   })
 
   it('should handle clear errors', async () => {
-    // Since clearMessages has Promise<void>, it doesn't report results
-    // Just verify it can be called without errors
-    vi.mocked(request.delete).mockReturnValue({
-      query: vi.fn().mockReturnValue({
-        end: vi.fn().mockResolvedValue({
-          body: { status: 'ok' },
-        }),
-      }),
-    } as any)
+    const chain = mockChain({ body: { status: 'ok' } })
+    vi.mocked(request.delete).mockReturnValue(chain)
 
-    // Should not throw
     await clearMessages('error-session')
     expect(request.delete).toHaveBeenCalled()
+  })
+})
+
+describe('parseApiError', () => {
+  it('should parse structured error response from server', () => {
+    const error = {
+      response: {
+        body: {
+          error_code: 'timeout',
+          message: 'All models timed out.',
+        },
+      },
+    }
+
+    const result = parseApiError(error)
+
+    expect(result.error_code).toBe('timeout')
+    expect(result.message).toBe('All models timed out.')
+  })
+
+  it('should handle timeout errors from superagent', () => {
+    const error = { timeout: true }
+
+    const result = parseApiError(error)
+
+    expect(result.error_code).toBe('timeout')
+  })
+
+  it('should handle network errors with no response', () => {
+    const error = { message: 'socket hang up' }
+
+    const result = parseApiError(error)
+
+    expect(result.error_code).toBe('network_error')
+  })
+
+  it('should handle unknown errors', () => {
+    const error = { response: { body: {} }, message: 'Something weird' }
+
+    const result = parseApiError(error)
+
+    expect(result.error_code).toBe('unknown')
+    expect(result.message).toBe('Something weird')
   })
 })

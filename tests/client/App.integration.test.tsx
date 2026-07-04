@@ -9,6 +9,7 @@ vi.mock('../apiClient', () => ({
   sendMessage: vi.fn(),
   getMessages: vi.fn(),
   clearMessages: vi.fn(),
+  parseApiError: vi.fn().mockReturnValue({ error_code: 'unknown', message: 'Error' }),
 }))
 
 describe('App Component Integration', () => {
@@ -78,6 +79,7 @@ describe('App Component Integration', () => {
       id: 'msg-3',
       reply: 'Based on MOE policy...',
       sources: [{ file: 'handbook.pdf', page: '5', score: 0.92 }],
+      no_context: false,
     })
 
     renderApp()
@@ -104,6 +106,7 @@ describe('App Component Integration', () => {
       id: 'msg-4',
       reply: 'Response',
       sources: [],
+      no_context: false,
     })
     vi.mocked(clearMessages).mockResolvedValue({ status: 'ok' })
 
@@ -142,6 +145,7 @@ describe('App Component Integration', () => {
                 id: 'msg-5',
                 reply: 'Response',
                 sources: [],
+                no_context: false,
               }),
             100,
           ),
@@ -172,6 +176,7 @@ describe('App Component Integration', () => {
         { file: 'policy2.pdf', page: '3', score: 0.88 },
         { file: 'guide.pdf', page: '10', score: 0.82 },
       ],
+      no_context: false,
     })
 
     renderApp()
@@ -212,6 +217,7 @@ describe('App Component Integration', () => {
       id: 'msg-8',
       reply: 'New answer',
       sources: [],
+      no_context: false,
     })
 
     renderApp()
