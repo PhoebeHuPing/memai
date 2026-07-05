@@ -68,16 +68,17 @@ Priority 4 (Low): Minor issues for routine maintenance.
         from server.main import app
         app.dependency_overrides[database.get_session] = override_get_session
         
-        # Patch RAG service
-        import server.main
-        server.main.rag_service = cls.mock_rag_service
+        # Patch RAG service (now lives in server.routers.chat)
+        import server.routers.chat
+        server.routers.chat.rag_service = cls.mock_rag_service
         
-        # Mock Gemini client
+        # Mock Gemini client (now lives in server.services.gemini_service)
         cls.mock_client = MagicMock()
         cls.mock_response = MagicMock()
         cls.mock_response.text = "Based on MOE policy, this falls under Priority 2 (High). The 5YA framework typically requires..."
         cls.mock_client.models.generate_content.return_value = cls.mock_response
-        server.main.client = cls.mock_client
+        import server.services.gemini_service
+        server.services.gemini_service.client = cls.mock_client
         
         cls.client = TestClient(app)
     
