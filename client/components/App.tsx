@@ -6,7 +6,30 @@ import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import SessionSidebar from './SessionSidebar'
 import { Message } from '../../types/Message'
-import { sendMessage, getMessages, clearMessages } from '../apiClient'
+import {
+  sendMessage,
+  getMessages,
+  clearMessages,
+  parseApiError,
+  ChatResponse,
+  ErrorResponse,
+} from '../apiClient'
+
+/** Map error codes to user-friendly toast messages */
+function getErrorToast(err: ErrorResponse): { message: string; duration: number } {
+  switch (err.error_code) {
+    case 'timeout':
+      return { message: '⏱️ Request timed out — the AI service is slow right now. Please try again.', duration: 6000 }
+    case 'rate_limited':
+      return { message: '🚦 Too many requests — please wait a moment and try again.', duration: 6000 }
+    case 'service_unavailable':
+      return { message: '🔧 AI service is temporarily unavailable. Please try again shortly.', duration: 6000 }
+    case 'network_error':
+      return { message: '🌐 Cannot reach the server. Check your internet connection.', duration: 8000 }
+    default:
+      return { message: err.message || 'Something went wrong. Please try again.', duration: 5000 }
+  }
+}
 
 export default function App() {
   const queryClient = useQueryClient()
@@ -43,14 +66,28 @@ export default function App() {
       const messageId = crypto.randomUUID()
       return sendMessage(messageId, content, messages, sessionId)
     },
-    onMutate: () => {
-      toast.loading('AI is thinking...')
-    },
     onError: (error: any) => {
       toast.dismiss()
-      toast.error(error?.message ?? 'Request failed')
+      const parsed = parseApiError(error)
+      const { message, duration } = getErrorToast(parsed)
+      toast.error(message, { duration })
     },
-    onSuccess: (data) => {
+    onSuccess: (data: ChatResponse) => {
+      toast.dismiss()
+
+      // Show warning if DB persistence failed
+      if (data.warning) {
+        toast(data.warning, { icon: '⚠️', duration: 5000 })
+      }
+
+      // Show notice if no relevant documents were found
+      if (data.no_context) {
+        toast('No relevant policy documents found for this question. The response is based on general knowledge.', {
+          icon: 'ℹ️',
+          duration: 5000,
+        })
+      }
+
       const newMessage: Message = {
         id: data.id,
         role: 'assistant',
@@ -62,9 +99,6 @@ export default function App() {
       queryClient.invalidateQueries({ queryKey: ['messages', sessionId] })
       // Refresh session list so the new session appears
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
-    },
-    onSettled: () => {
-      toast.dismiss()
     },
   })
 
