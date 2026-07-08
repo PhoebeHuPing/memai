@@ -6,6 +6,8 @@ import sys
 import unittest
 import tempfile
 import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import create_engine, SQLModel, Session
 
@@ -165,6 +167,32 @@ class TestChatAPI(unittest.TestCase):
         self.assertEqual(data[0]["id"], "msg-with-sources")
         # Sources should be in the response
         self.assertIn("sources", data[0])
+
+    def test_chat_creates_session_title_from_first_message(self):
+        """A new session should get a readable title based on the first user message."""
+        from server.models import ChatSession
+        from server.services import gemini_service
+
+        with patch.object(gemini_service, "client", object()), patch(
+            "server.routers.chat.generate_with_retry_and_fallback",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(text="Answer"),
+        ), patch("server.routers.chat.rag_service", None):
+            response = self.client.post(
+                "/api/v1/chat",
+                json={
+                    "message_id": "msg-new-session",
+                    "message": "What is the 5YA process?",
+                    "history": [],
+                    "session_id": "new-session",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        with Session(self.engine) as session:
+            chat_session = session.get(ChatSession, "new-session")
+            self.assertIsNotNone(chat_session)
+            self.assertEqual(chat_session.title, "What is the 5YA process")
 
 
 if __name__ == "__main__":
