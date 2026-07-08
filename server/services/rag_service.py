@@ -20,18 +20,25 @@ class RAGService:
         # Resolve a stable base directory two levels up (project root)
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.db_path = db_path or os.path.join(base_dir, "data", "chroma_db")
-        self.collection_name = "nz_school_policy"
+        self.collection_name = "nz_school_property_policy"
+        self.embedding_enabled = False
 
         os.makedirs(self.db_path, exist_ok=True)
 
         # Initialise Gemini embedding model (requires API key)
         api_key = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
-        if not api_key:
-            raise RuntimeError("Missing GOOGLE_GENERATIVE_AI_API_KEY for RAGService")
-        Settings.embed_model = GeminiEmbedding(
-            api_key=api_key,
-            model_name="models/gemini-embedding-001",
-        )
+        if api_key:
+            self.embedding_enabled = True
+            Settings.embed_model = GeminiEmbedding(
+                api_key=api_key,
+                model_name="models/gemini-embedding-001",
+            )
+        else:
+            Settings.embed_model = None
+            print(
+                "Warning: Missing GOOGLE_GENERATIVE_AI_API_KEY; RAG embeddings are disabled. "
+                "Queries will return no context until the key is configured."
+            )
 
         # Persistent Chroma client & collection
         self.client = chromadb.PersistentClient(path=self.db_path)
@@ -48,6 +55,10 @@ class RAGService:
         Existing collection is cleared to avoid duplicate chunks.
         Returns the created ``VectorStoreIndex`` for optional further use.
         """
+        if not self.embedding_enabled:
+            print("Skipping document ingestion because Gemini embeddings are unavailable.")
+            return VectorStoreIndex([], storage_context=self.storage_context)
+
         # Reset collection to avoid stale data
         self.client.delete_collection(self.collection_name)
         self.chroma_collection = self.client.create_collection(self.collection_name)
@@ -89,6 +100,9 @@ class RAGService:
         - ``context``: concatenated chunk texts separated by ``---``.
         - ``sources``: list of metadata dicts (file, page, score).
         """
+        if not self.embedding_enabled:
+            return {"context": "", "sources": []}
+
         try:
             index = VectorStoreIndex.from_vector_store(
                 self.vector_store, storage_context=self.storage_context
