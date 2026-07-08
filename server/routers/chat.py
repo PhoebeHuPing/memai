@@ -9,7 +9,7 @@ from google.genai import types
 from sqlmodel import Session, select
 
 from server.database import get_session
-from server.models import ChatMessage as DBMessage
+from server.models import ChatMessage as DBMessage, ChatSession
 from server.schemas import ChatRequest
 from server.services import gemini_service
 from server.services.gemini_service import (
@@ -19,6 +19,18 @@ from server.services.gemini_service import (
 from server.services.rag_service import RAGService
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
+
+
+def _build_session_title(message: str) -> str:
+    cleaned = " ".join(message.strip().split())
+    if not cleaned:
+        return "New Chat"
+
+    title = cleaned[:60].strip()
+    if len(cleaned) > 60:
+        title = f"{title}..."
+    return title.rstrip("?!.")
+
 
 # Initialize RAG service
 try:
@@ -111,6 +123,15 @@ async def chat(request: ChatRequest, db: Session = Depends(get_session)):
     # --- Step 4: Persist messages (isolated from response) ---
     db_error = None
     try:
+        existing_session = db.get(ChatSession, request.session_id)
+        if not existing_session:
+            chat_session = ChatSession(
+                id=request.session_id,
+                title=_build_session_title(request.message),
+                created_at=int(time.time() * 1000),
+            )
+            db.add(chat_session)
+
         user_msg = DBMessage(
             id=request.message_id,
             session_id=request.session_id,
