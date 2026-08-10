@@ -1,17 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import SessionSidebar from './SessionSidebar'
-import { Message } from '../../types/Message'
+import { Message, Source } from '../../types/Message'
 import {
-  sendMessage,
+  sendMessageStream,
   getMessages,
   clearMessages,
-  parseApiError,
-  ChatResponse,
   ErrorResponse,
 } from '../apiClient'
 
@@ -35,6 +33,8 @@ export default function App() {
   const queryClient = useQueryClient()
   const [sessionId, setSessionId] = useState<string>('default')
   const [messages, setMessages] = useState<Message[]>([])
+  const [isStreaming, setIsStreaming] = useState(false)
+  const streamingContentRef = useRef('')
 
   // Load messages for the current session
   const { data: loadedMessages } = useQuery({
@@ -61,47 +61,6 @@ export default function App() {
     setMessages([])
   }
 
-  const mutation = useMutation({
-    mutationFn: (content: string) => {
-      const messageId = crypto.randomUUID()
-      return sendMessage(messageId, content, messages, sessionId)
-    },
-    onError: (error: any) => {
-      toast.dismiss()
-      const parsed = parseApiError(error)
-      const { message, duration } = getErrorToast(parsed)
-      toast.error(message, { duration })
-    },
-    onSuccess: (data: ChatResponse) => {
-      toast.dismiss()
-
-      // Show warning if DB persistence failed
-      if (data.warning) {
-        toast(data.warning, { icon: '⚠️', duration: 5000 })
-      }
-
-      // Show notice if no relevant documents were found
-      if (data.no_context) {
-        toast('No relevant policy documents found for this question. The response is based on general knowledge.', {
-          icon: 'ℹ️',
-          duration: 5000,
-        })
-      }
-
-      const newMessage: Message = {
-        id: data.id,
-        role: 'assistant',
-        content: data.reply,
-        timestamp: Date.now(),
-        sources: data.sources,
-      }
-      setMessages((prev) => [...prev, newMessage])
-      queryClient.invalidateQueries({ queryKey: ['messages', sessionId] })
-      // Refresh session list so the new session appears
-      queryClient.invalidateQueries({ queryKey: ['sessions'] })
-    },
-  })
-
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   useEffect(() => {
@@ -122,21 +81,94 @@ export default function App() {
 
   const handleSessionDeleted = (deletedSessionId: string) => {
     if (deletedSessionId === sessionId) {
-      // Deleted the current session — switch to a new one
       handleNewSession()
     }
   }
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = useCallback(async (content: string) => {
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content,
       timestamp: Date.now(),
     }
-    setMessages((prev) => [...prev, userMessage])
-    mutation.mutate(content)
-  }
+
+    // Create a placeholder assistant message for streaming
+    const assistantId = crypto.randomUUID()
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+    }
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage])
+    setIsStreaming(true)
+    streamingContentRef.current = ''
+
+    let streamSources: Source[] = []
+
+    try {
+      await sendMessageStream(
+        userMessage.id,
+        content,
+        messages,
+        sessionId,
+        {
+          onToken: (token) => {
+            streamingContentRef.current += token
+            const currentContent = streamingContentRef.current
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: currentContent }
+                  : msg,
+              ),
+            )
+          },
+          onMeta: (meta) => {
+            streamSources = meta.sources
+            if (meta.no_context) {
+              toast('No relevant policy documents found for this question. The response is based on general knowledge.', {
+                icon: 'ℹ️',
+                duration: 5000,
+              })
+            }
+          },
+          onDone: (data) => {
+            // Update the assistant message with final ID and sources
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, id: data.id, sources: streamSources }
+                  : msg,
+              ),
+            )
+            if (data.warning) {
+              toast(data.warning, { icon: '⚠️', duration: 5000 })
+            }
+            queryClient.invalidateQueries({ queryKey: ['messages', sessionId] })
+            queryClient.invalidateQueries({ queryKey: ['sessions'] })
+          },
+          onError: (error) => {
+            // Remove the empty assistant message on error
+            setMessages((prev) => prev.filter((msg) => msg.id !== assistantId))
+            toast.error(error, { duration: 6000 })
+          },
+        },
+      )
+    } catch (err: any) {
+      setMessages((prev) => prev.filter((msg) => msg.id !== assistantId))
+      const errorMsg: ErrorResponse = {
+        error_code: 'network_error',
+        message: err?.message || 'Failed to connect to server',
+      }
+      const { message, duration } = getErrorToast(errorMsg)
+      toast.error(message, { duration })
+    } finally {
+      setIsStreaming(false)
+    }
+  }, [messages, sessionId, queryClient])
 
   return (
     <div className="app-container">
@@ -161,7 +193,7 @@ export default function App() {
           <button
             onClick={handleClearChat}
             className="clear-button"
-            disabled={mutation.isPending}
+            disabled={isStreaming}
           >
             Clear Chat
           </button>
@@ -177,7 +209,7 @@ export default function App() {
               <ChatMessage key={message.id} message={message} />
             ))
           )}
-          {mutation.isPending && (
+          {isStreaming && messages[messages.length - 1]?.content === '' && (
             <div className="loading-indicator">
               <div className="loading-dots">
                 <span />
@@ -191,7 +223,7 @@ export default function App() {
 
         <ChatInput
           onSendMessage={handleSendMessage}
-          disabled={mutation.isPending}
+          disabled={isStreaming}
         />
       </div>
     </div>

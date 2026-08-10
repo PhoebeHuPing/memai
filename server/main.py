@@ -8,6 +8,7 @@ import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from server.database import create_db_and_tables
 from server.routers import chat, sessions
@@ -75,6 +76,22 @@ async def unified_generic_exception_handler(request: Request, exc: Exception):
 # --- Register routers ---
 app.include_router(sessions.router)
 app.include_router(chat.router)
+
+# --- Serve frontend static files in production ---
+_dist_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dist")
+if os.path.isdir(_dist_dir):
+    from fastapi.responses import FileResponse
+
+    # Serve static assets (JS, CSS, etc.)
+    app.mount("/assets", StaticFiles(directory=os.path.join(_dist_dir, "assets")), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve index.html for any non-API route (SPA fallback)."""
+        file_path = os.path.join(_dist_dir, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(_dist_dir, "index.html"))
 
 
 if __name__ == "__main__":

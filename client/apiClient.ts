@@ -104,6 +104,79 @@ export async function sendMessage(
   }
 }
 
+/**
+ * Stream a chat response via SSE. Calls onToken for each text chunk,
+ * onMeta when sources/no_context metadata arrives, and onDone when complete.
+ */
+export async function sendMessageStream(
+  messageId: string,
+  message: string,
+  history: Message[],
+  sessionId: string = 'default',
+  callbacks: {
+    onToken: (token: string) => void
+    onMeta?: (meta: { sources: Source[]; no_context: boolean }) => void
+    onDone: (data: { id: string; warning?: string }) => void
+    onError: (error: string) => void
+  },
+): Promise<void> {
+  const response = await fetch(`${rootUrl}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message_id: messageId,
+      message,
+      history,
+      session_id: sessionId,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null)
+    callbacks.onError(
+      errorBody?.message || errorBody?.detail || `HTTP ${response.status}`,
+    )
+    return
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    callbacks.onError('Streaming not supported by browser')
+    return
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const jsonStr = line.slice(6)
+      try {
+        const data = JSON.parse(jsonStr)
+        if (data.token !== undefined) {
+          callbacks.onToken(data.token)
+        } else if (data.sources !== undefined) {
+          callbacks.onMeta?.({ sources: data.sources, no_context: data.no_context })
+        } else if (data.done) {
+          callbacks.onDone({ id: data.id, warning: data.warning })
+        } else if (data.error) {
+          callbacks.onError(data.error)
+        }
+      } catch {
+        // Ignore malformed JSON lines
+      }
+    }
+  }
+}
+
 export async function renameSession(sessionId: string, title: string): Promise<void> {
   await request
     .patch(`${rootUrl}/sessions/${sessionId}`)
