@@ -133,3 +133,46 @@ async def generate_with_retry_and_fallback(contents: list) -> object:
             status_code=503,
             detail=f"All models ({', '.join(tried_models)}) failed. Last error: {str(last_error)}",
         )
+
+
+async def generate_stream(contents: list):
+    """Stream tokens from Gemini using generate_content_stream.
+
+    Yields text chunks as they arrive. Uses the first available model in the
+    fallback chain (no per-chunk retry — if streaming fails mid-way the caller
+    should handle the error event).
+
+    Raises HTTPException if no model can start streaming.
+    """
+    if not client:
+        raise HTTPException(status_code=500, detail="API key not configured")
+
+    last_error: Exception | None = None
+
+    for model_name in fallback_models:
+        try:
+            print(f"[Stream] Starting stream with model={model_name}")
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda m=model_name: client.models.generate_content_stream(
+                    model=m, contents=contents
+                ),
+            )
+            # Yield chunks from the synchronous iterator
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+            print(f"[Stream] Completed with model={model_name}")
+            return
+        except Exception as e:
+            print(f"[Stream] Error with {model_name}: {e}")
+            last_error = e
+            continue
+
+    # All models failed to start streaming
+    if last_error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"All models failed to stream. Last error: {str(last_error)}",
+        )

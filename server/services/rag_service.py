@@ -39,6 +39,9 @@ class RAGService:
         self.vector_store = ChromaVectorStore(chroma_collection=self.chroma_collection)
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
+        # Cached index — built once and reused across queries
+        self._index: VectorStoreIndex | None = None
+
     # ---------------------------------------------------------------------
     # Ingestion
     # ---------------------------------------------------------------------
@@ -77,6 +80,8 @@ class RAGService:
             storage_context=self.storage_context,
             show_progress=True,
         )
+        # Cache the new index for query reuse
+        self._index = index
         return index
 
     # ---------------------------------------------------------------------
@@ -90,10 +95,13 @@ class RAGService:
         - ``sources``: list of metadata dicts (file, page, score).
         """
         try:
-            index = VectorStoreIndex.from_vector_store(
-                self.vector_store, storage_context=self.storage_context
-            )
-            retriever = index.as_retriever(similarity_top_k=top_k)
+            # Reuse cached index if available; otherwise build from vector store
+            if self._index is None:
+                self._index = VectorStoreIndex.from_vector_store(
+                    self.vector_store, storage_context=self.storage_context
+                )
+
+            retriever = self._index.as_retriever(similarity_top_k=top_k)
             nodes = retriever.retrieve(question)
 
             sources = []
