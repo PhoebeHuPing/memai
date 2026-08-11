@@ -7,6 +7,10 @@ from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.core.schema import TextNode
 from pypdf import PdfReader
 
+from server.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class RAGService:
     """Service wrapping a ChromaDB vector store for Retrieval‑Augmented Generation.
@@ -73,7 +77,7 @@ class RAGService:
                         )
                     )
 
-        print(f"Loaded {len(nodes)} page chunks from {len(pdf_files)} PDF(s)")
+        logger.info("Loaded page chunks from PDFs", extra={"chunks": len(nodes), "pdf_count": len(pdf_files)})
 
         index = VectorStoreIndex(
             nodes,
@@ -120,5 +124,5 @@ class RAGService:
             return {"context": "\n\n---\n\n".join(context_texts), "sources": sources}
         except Exception as exc:
             # Log error and return empty result to keep API functional
-            print(f"[RAGService] query error: {exc}")
+            logger.error("RAG query error", exc_info=exc)
             return {"context": "", "sources": []}

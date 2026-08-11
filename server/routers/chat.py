@@ -20,16 +20,21 @@ from server.services.gemini_service import (
 )
 from server.services.rag_service import RAGService
 
+from server.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 # Initialize RAG service
 try:
     rag_service: RAGService | None = RAGService()
-    print(
-        f"RAG service initialized. Collection has {rag_service.chroma_collection.count()} documents."
+    logger.info(
+        "RAG service initialized",
+        extra={"document_count": rag_service.chroma_collection.count()},
     )
 except Exception as e:
-    print(f"Warning: RAG service failed to initialize: {e}")
+    logger.warning("RAG service failed to initialize", exc_info=e)
     rag_service = None
 
 
@@ -134,7 +139,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_session)):
         db.add(bot_msg)
         db.commit()
     except Exception as e:
-        print(f"[DB Error] Failed to persist messages: {e}")
+        logger.error("Failed to persist messages", exc_info=e, extra={"session_id": request.session_id})
         db_error = str(e)
         bot_id = str(uuid.uuid4())
         try:
@@ -262,7 +267,7 @@ async def chat_stream(request: ChatRequest, db: Session = Depends(get_session)):
             db.add(bot_msg)
             db.commit()
         except Exception as e:
-            print(f"[DB Error] Failed to persist messages: {e}")
+            logger.error("Failed to persist messages", exc_info=e, extra={"session_id": request.session_id})
             db_error = str(e)
             try:
                 db.rollback()

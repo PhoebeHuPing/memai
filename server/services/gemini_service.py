@@ -7,19 +7,23 @@ from fastapi import HTTPException
 from google import genai
 from dotenv import load_dotenv
 
+from server.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 load_dotenv()
 
 # --- Client setup ---
 api_key = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
 if not api_key:
-    print("Warning: GOOGLE_GENERATIVE_AI_API_KEY not found")
+    logger.warning("GOOGLE_GENERATIVE_AI_API_KEY not found")
     client = None
 else:
     client = genai.Client(api_key=api_key)
 
 # --- Model configuration ---
 gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-print(f"Gemini model configured: {gemini_model}")
+logger.info("Gemini model configured", extra={"model": gemini_model})
 
 fallback_models: list[str] = []
 if gemini_model:
@@ -27,7 +31,7 @@ if gemini_model:
 for model_candidate in ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
     if model_candidate not in fallback_models:
         fallback_models.append(model_candidate)
-print(f"Model fallback chain: {fallback_models}")
+logger.info("Model fallback chain", extra={"models": fallback_models})
 
 # --- Timeout/retry configuration ---
 GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30"))
@@ -88,15 +92,17 @@ async def generate_with_retry_and_fallback(contents: list) -> object:
     for model_name in fallback_models:
         for attempt in range(GEMINI_MAX_RETRIES + 1):
             try:
-                print(
-                    f"Attempting model={model_name}, attempt={attempt + 1}/{GEMINI_MAX_RETRIES + 1}"
+                logger.debug(
+                    "Attempting generation",
+                    extra={"model": model_name, "attempt": attempt + 1, "max_attempts": GEMINI_MAX_RETRIES + 1},
                 )
                 response = await _generate_with_timeout(model_name, contents)
-                print(f"Successfully generated with model: {model_name}")
+                logger.info("Successfully generated", extra={"model": model_name})
                 return response
             except asyncio.TimeoutError:
-                print(
-                    f"Timeout: model={model_name} did not respond within {GEMINI_TIMEOUT_SECONDS}s"
+                logger.warning(
+                    "Model timed out",
+                    extra={"model": model_name, "timeout_seconds": GEMINI_TIMEOUT_SECONDS},
                 )
                 last_error = TimeoutError(
                     f"Model {model_name} timed out after {GEMINI_TIMEOUT_SECONDS}s"
@@ -107,13 +113,16 @@ async def generate_with_retry_and_fallback(contents: list) -> object:
                 last_error = e
                 if _is_retryable_error(e) and attempt < GEMINI_MAX_RETRIES:
                     delay = GEMINI_RETRY_BASE_DELAY * (2**attempt)
-                    print(
-                        f"Retryable error on {model_name} (attempt {attempt + 1}): {e}. "
-                        f"Retrying in {delay}s..."
+                    logger.warning(
+                        "Retryable error, will retry",
+                        extra={"model": model_name, "attempt": attempt + 1, "delay": delay, "error": str(e)},
                     )
                     await asyncio.sleep(delay)
                 else:
-                    print(f"Non-retryable or exhausted retries for {model_name}: {e}")
+                    logger.error(
+                        "Non-retryable or retries exhausted",
+                        extra={"model": model_name, "error": str(e)},
+                    )
                     tried_models.append(model_name)
                     break
 
@@ -151,7 +160,7 @@ async def generate_stream(contents: list):
 
     for model_name in fallback_models:
         try:
-            print(f"[Stream] Starting stream with model={model_name}")
+            logger.debug("Starting stream", extra={"model": model_name})
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
@@ -163,10 +172,10 @@ async def generate_stream(contents: list):
             for chunk in response:
                 if chunk.text:
                     yield chunk.text
-            print(f"[Stream] Completed with model={model_name}")
+            logger.info("Stream completed", extra={"model": model_name})
             return
         except Exception as e:
-            print(f"[Stream] Error with {model_name}: {e}")
+            logger.error("Stream error", extra={"model": model_name, "error": str(e)})
             last_error = e
             continue
 
