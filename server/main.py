@@ -11,8 +11,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.database import create_db_and_tables
+from server.logging_config import get_logger, setup_logging
 from server.routers import chat, sessions
 from server.schemas import ErrorResponse
+
+setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = get_logger(__name__)
 
 app = FastAPI()
 
@@ -62,7 +66,7 @@ async def unified_http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def unified_generic_exception_handler(request: Request, exc: Exception):
     """Catch-all for unhandled exceptions."""
-    print(f"Unhandled exception: {exc}")
+    logger.error("Unhandled exception", exc_info=exc, extra={"path": str(request.url)})
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
