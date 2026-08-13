@@ -73,79 +73,23 @@ async def chat(request: ChatRequest, db: Session = Depends(get_session)):
         raise HTTPException(status_code=500, detail="API key not configured")
 
     # --- Step 1: Retrieve RAG context ---
-    sources: list = []
-    context_block = ""
-    no_context = False
-
-    if rag_service and rag_service.chroma_collection.count() > 0:
-        rag_result = rag_service.query(request.message)
-        context_block = rag_result["context"]
-        sources = rag_result["sources"]
-
-    # Mark when RAG found nothing useful
-    if not context_block.strip():
-        no_context = True
+    context_block, sources, no_context = _build_rag_context(request.message)
 
     # --- Step 2: Build prompt ---
-    user_content = request.message
-    if context_block:
-        user_content = (
-            f"Context from MOE policy documents:\n\n{context_block}\n\n"
-            f"---\n\nUser question: {request.message}"
-        )
-
-    contents = [types.Content(role="user", parts=[types.Part(text=SYSTEM_PROMPT)])]
-    contents.append(
-        types.Content(
-            role="model",
-            parts=[
-                types.Part(
-                    text="Understood. I will answer based on MOE policy documents and cite sources."
-                )
-            ],
-        )
-    )
-
-    for msg in request.history:
-        role = "user" if msg.role == "user" else "model"
-        contents.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
-
-    contents.append(types.Content(role="user", parts=[types.Part(text=user_content)]))
+    contents = _build_contents(request.message, context_block, request.history)
 
     # --- Step 3: Generate with timeout + retry + fallback ---
     response = await generate_with_retry_and_fallback(contents)
 
     # --- Step 4: Persist messages (isolated from response) ---
-    db_error = None
-    try:
-        user_msg = DBMessage(
-            id=request.message_id,
-            session_id=request.session_id,
-            role="user",
-            content=request.message,
-            timestamp=int(time.time() * 1000),
-        )
-        db.add(user_msg)
-
-        bot_id = str(uuid.uuid4())
-        bot_msg = DBMessage(
-            id=bot_id,
-            session_id=request.session_id,
-            role="assistant",
-            content=response.text,
-            timestamp=int(time.time() * 1000) + 1,
-            sources=json.dumps(sources) if sources else None,
-        )
-        db.add(bot_msg)
-        db.commit()
-    except Exception as e:
-        logger.error("Failed to persist messages", exc_info=e, extra={"session_id": request.session_id})
-        db_error = str(e)
-        bot_id = str(uuid.uuid4())
-        try:
-            db.rollback()
-        except Exception:
-            pass
+    bot_id, db_error = _persist_messages(
+        db=db,
+        message_id=request.message_id,
+        session_id=request.session_id,
+        user_content=request.message,
+        assistant_content=response.text,
+        sources=sources,
+    )
 
     # --- Step 5: Return response (even if DB failed) ---
     result = {
@@ -158,6 +102,51 @@ async def chat(request: ChatRequest, db: Session = Depends(get_session)):
         result["warning"] = "Message generated but could not be saved to history."
 
     return result
+
+
+def _persist_messages(
+    db: Session,
+    message_id: str,
+    session_id: str,
+    user_content: str,
+    assistant_content: str,
+    sources: list,
+) -> tuple[str, str | None]:
+    """Persist user and assistant messages to the database.
+
+    Returns (bot_id, db_error). db_error is None on success.
+    """
+    bot_id = str(uuid.uuid4())
+    db_error = None
+    try:
+        user_msg = DBMessage(
+            id=message_id,
+            session_id=session_id,
+            role="user",
+            content=user_content,
+            timestamp=int(time.time() * 1000),
+        )
+        db.add(user_msg)
+
+        bot_msg = DBMessage(
+            id=bot_id,
+            session_id=session_id,
+            role="assistant",
+            content=assistant_content,
+            timestamp=int(time.time() * 1000) + 1,
+            sources=json.dumps(sources) if sources else None,
+        )
+        db.add(bot_msg)
+        db.commit()
+    except Exception as e:
+        logger.error("Failed to persist messages", exc_info=e, extra={"session_id": session_id})
+        db_error = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return bot_id, db_error
 
 
 def _build_rag_context(message: str) -> tuple[str, list, bool]:
@@ -244,35 +233,14 @@ async def chat_stream(request: ChatRequest, db: Session = Depends(get_session)):
             return
 
         # Persist messages after streaming completes
-        bot_id = str(uuid.uuid4())
-        db_error = None
-        try:
-            user_msg = DBMessage(
-                id=request.message_id,
-                session_id=request.session_id,
-                role="user",
-                content=request.message,
-                timestamp=int(time.time() * 1000),
-            )
-            db.add(user_msg)
-
-            bot_msg = DBMessage(
-                id=bot_id,
-                session_id=request.session_id,
-                role="assistant",
-                content=full_text,
-                timestamp=int(time.time() * 1000) + 1,
-                sources=json.dumps(sources) if sources else None,
-            )
-            db.add(bot_msg)
-            db.commit()
-        except Exception as e:
-            logger.error("Failed to persist messages", exc_info=e, extra={"session_id": request.session_id})
-            db_error = str(e)
-            try:
-                db.rollback()
-            except Exception:
-                pass
+        bot_id, db_error = _persist_messages(
+            db=db,
+            message_id=request.message_id,
+            session_id=request.session_id,
+            user_content=request.message,
+            assistant_content=full_text,
+            sources=sources,
+        )
 
         # Send done event
         done_data: dict = {"done": True, "id": bot_id}
