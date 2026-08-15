@@ -1,7 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
-
-// Effect moved inside component
-
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -14,12 +11,6 @@ interface ChatMessageProps {
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
-  const rootRef = useRef<HTMLDivElement>(null);
-
-
-
-
-
   const [showFull, setShowFull] = useState(false);
 
   const isUser = message.role === 'user';
@@ -27,7 +18,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const displayedContent = isUser || !isLong || showFull ? message.content : `${message.content.slice(0, 300)}...`;
 
   return (
-    <div ref={rootRef} className={`message ${isUser ? 'user-message' : 'assistant-message'}`}>
+    <div className={`message ${isUser ? 'user-message' : 'assistant-message'}`}>
       <div className="message-content">
         <span className="message-role-label">{isUser ? 'You' : 'MemAI'}</span>
         <div className="message-text">
