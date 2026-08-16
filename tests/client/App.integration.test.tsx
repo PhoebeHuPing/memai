@@ -227,6 +227,61 @@ describe('App Component Integration', () => {
     })
   })
 
+  it('should show no_context toast when response has no relevant documents', async () => {
+    mockGetMessages.mockResolvedValue([])
+    setupStreamMock({
+      id: 'msg-toast-1',
+      reply: 'General knowledge answer',
+      sources: [],
+      no_context: true,
+    })
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Ask me about/)).toBeTruthy()
+    })
+
+    const input = screen.getByPlaceholderText(/Type your message/)
+    await userEvent.type(input, 'Something unrelated to policy')
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'No relevant policy documents found for this question. The response is based on general knowledge.',
+        ),
+      ).toBeTruthy()
+    })
+  })
+
+  it('should show warning toast when response includes a warning', async () => {
+    mockGetMessages.mockResolvedValue([])
+    setupStreamMock({
+      id: 'msg-toast-2',
+      reply: 'Partial answer with caveat',
+      sources: [{ file: 'policy.pdf', page: '2', score: 0.7 }],
+      no_context: false,
+      warning: 'Some retrieved documents may be outdated.',
+    })
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Ask me about/)).toBeTruthy()
+    })
+
+    const input = screen.getByPlaceholderText(/Type your message/)
+    await userEvent.type(input, 'Question with warning')
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Some retrieved documents may be outdated.'),
+      ).toBeTruthy()
+    })
+  })
+
   it('should handle stream errors gracefully', async () => {
     mockGetMessages.mockResolvedValue([])
     mockSendMessageStream.mockImplementation(
