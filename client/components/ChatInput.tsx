@@ -16,15 +16,26 @@ export default function ChatInput({ onSendMessage, disabled }: ChatInputProps) {
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault()
+      if (input.trim() && !disabled) {
+        onSendMessage(input.trim())
+        setInput('')
+      }
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="chat-input-form">
-      <input
-        type="text"
+      <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder="Type your message..."
+        onKeyDown={handleKeyDown}
+        placeholder="Type your message... (Ctrl+Enter to send)"
         disabled={disabled}
         className="chat-input"
+        rows={3}
       />
       <button type="submit" disabled={disabled || !input.trim()} className="send-button">
         Send
