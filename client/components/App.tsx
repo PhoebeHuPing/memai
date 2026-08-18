@@ -35,6 +35,12 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const streamingContentRef = useRef('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when messages change or during streaming
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   // Load messages for the current session
   const { data: loadedMessages } = useQuery({
@@ -219,6 +225,7 @@ export default function App() {
               <span>AI is thinking...</span>
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         <ChatInput
