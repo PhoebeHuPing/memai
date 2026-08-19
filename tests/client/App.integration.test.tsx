@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  cleanup,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from '../../client/components/App'
@@ -28,7 +34,9 @@ vi.mock('../../client/apiClient', () => ({
   getSessions: vi.fn().mockResolvedValue([]),
   renameSession: vi.fn(),
   deleteSession: vi.fn(),
-  parseApiError: vi.fn().mockReturnValue({ error_code: 'unknown', message: 'Error' }),
+  parseApiError: vi
+    .fn()
+    .mockReturnValue({ error_code: 'unknown', message: 'Error' }),
 }))
 
 const mockGetMessages = vi.mocked(apiClient.getMessages)
@@ -47,7 +55,10 @@ function setupStreamMock(response: {
 }) {
   mockSendMessageStream.mockImplementation(
     async (_messageId, _message, _history, _sessionId, callbacks) => {
-      callbacks.onMeta?.({ sources: response.sources, no_context: response.no_context })
+      callbacks.onMeta?.({
+        sources: response.sources,
+        no_context: response.no_context,
+      })
       // Stream the reply as a single token
       callbacks.onToken(response.reply)
       callbacks.onDone({ id: response.id, warning: response.warning })
@@ -197,6 +208,39 @@ describe('App Component Integration', () => {
     await waitFor(() => {
       expect(screen.getByText(/AI is thinking/)).toBeTruthy()
     })
+  })
+
+  it('should send message on Enter and keep Shift+Enter as newline', async () => {
+    mockGetMessages.mockResolvedValue([])
+    setupStreamMock({
+      id: 'msg-enter',
+      reply: 'Response from Enter',
+      sources: [],
+      no_context: false,
+    })
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Ask me about/)).toBeTruthy()
+    })
+
+    const input = screen.getByPlaceholderText(/Type your message/)
+    await userEvent.type(input, 'Enter sends this')
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
+
+    await waitFor(() => {
+      expect(screen.getByText('Enter sends this')).toBeTruthy()
+    })
+
+    const secondInput = screen.getByPlaceholderText(/Type your message/)
+    fireEvent.keyDown(secondInput, {
+      key: 'Enter',
+      code: 'Enter',
+      shiftKey: true,
+    })
+
+    expect((secondInput as HTMLTextAreaElement).value).toBe('')
   })
 
   it('should handle multiple sources in streamed response', async () => {
