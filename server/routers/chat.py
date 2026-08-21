@@ -131,11 +131,11 @@ def _persist_messages(
     bot_id = str(uuid.uuid4())
     db_error = None
     try:
-        existing_session = db.get(ChatSession, request.session_id)
+        existing_session = db.get(ChatSession, session_id)
         if not existing_session:
             chat_session = ChatSession(
-                id=request.session_id,
-                title=_build_session_title(request.message),
+                id=session_id,
+                title=_build_session_title(user_content),
                 created_at=int(time.time() * 1000),
             )
             db.add(chat_session)
