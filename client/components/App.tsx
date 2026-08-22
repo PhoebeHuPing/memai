@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast, { Toaster } from 'react-hot-toast'
 import ChatMessage from './ChatMessage'
@@ -34,6 +34,8 @@ export default function App() {
       setMessages(loadedMessages)
     }
   }, [currentSessionId, loadedMessages])
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const mutation = useMutation({
     mutationFn: async (content: string) => {
@@ -88,7 +90,7 @@ export default function App() {
           },
           onDone: ({ warning }) => {
             if (warning) {
-              toast.warning(warning)
+              toast(warning, { icon: '⚠️' })
             }
             resolve()
           },
@@ -111,6 +113,10 @@ export default function App() {
       })
     },
   })
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, mutation.isPending])
 
   const handleSendMessage = (content: string) => {
     const userMessage: Message = {
@@ -218,6 +224,7 @@ export default function App() {
                 <span>AI is thinking...</span>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <ChatInput

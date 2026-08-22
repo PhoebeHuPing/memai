@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.database import create_db_and_tables
 from server.logging_config import get_logger, setup_logging
+from server.middleware.auth import API_SECRET_KEY, require_auth
 from server.routers import chat, sessions
 from server.schemas import ErrorResponse
 
@@ -35,6 +36,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Authentication middleware ---
+if API_SECRET_KEY:
+    logger.info("API authentication enabled (API_SECRET_KEY is set)")
+
+    @app.middleware("http")
+    async def auth_middleware(request: Request, call_next):
+        """Enforce bearer token auth on all /api/ routes."""
+        if request.url.path.startswith("/api/"):
+            try:
+                require_auth(request)
+            except HTTPException as exc:
+                return JSONResponse(
+                    status_code=exc.status_code,
+                    content=ErrorResponse(
+                        error_code="unauthorized",
+                        message=exc.detail,
+                    ).model_dump(),
+                )
+        return await call_next(request)
+else:
+    logger.info("API authentication disabled (no API_SECRET_KEY set)")
 
 
 # --- Unified error handling ---

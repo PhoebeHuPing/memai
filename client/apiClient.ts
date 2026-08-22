@@ -7,6 +7,20 @@ const rootUrl = '/api/v1'
 const RESPONSE_TIMEOUT = 35000 // Time to wait for server to start responding
 const DEADLINE_TIMEOUT = 60000 // Total time for the request to complete
 
+// Optional API key for authenticated deployments.
+// In production, inject via build-time env or a config endpoint.
+const API_KEY: string | undefined =
+  (typeof import.meta !== 'undefined' &&
+    (import.meta as any).env?.VITE_API_SECRET_KEY) ||
+  undefined
+
+function authHeaders(): Record<string, string> {
+  if (API_KEY) {
+    return { Authorization: `Bearer ${API_KEY}` }
+  }
+  return {}
+}
+
 export interface ChatResponse {
   id: string
   reply: string
@@ -61,6 +75,7 @@ export function parseApiError(error: any): ErrorResponse {
 export async function getSessions(): Promise<SessionInfo[]> {
   const response = await request
     .get(`${rootUrl}/sessions`)
+    .set(authHeaders())
     .timeout({ response: RESPONSE_TIMEOUT, deadline: DEADLINE_TIMEOUT })
   return response.body
 }
@@ -68,6 +83,7 @@ export async function getSessions(): Promise<SessionInfo[]> {
 export async function getMessages(sessionId: string = 'default'): Promise<Message[]> {
   const response = await request
     .get(`${rootUrl}/messages`)
+    .set(authHeaders())
     .query({ session_id: sessionId })
     .timeout({ response: RESPONSE_TIMEOUT, deadline: DEADLINE_TIMEOUT })
   return response.body
@@ -76,6 +92,7 @@ export async function getMessages(sessionId: string = 'default'): Promise<Messag
 export async function clearMessages(sessionId: string = 'default'): Promise<void> {
   await request
     .delete(`${rootUrl}/messages`)
+    .set(authHeaders())
     .query({ session_id: sessionId })
     .timeout({ response: RESPONSE_TIMEOUT, deadline: DEADLINE_TIMEOUT })
 }
@@ -88,6 +105,7 @@ export async function sendMessage(
 ): Promise<ChatResponse> {
   const response = await request
     .post(`${rootUrl}/chat`)
+    .set(authHeaders())
     .send({
       message_id: messageId,
       message,
@@ -122,7 +140,7 @@ export async function sendMessageStream(
 ): Promise<void> {
   const response = await fetch(`${rootUrl}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({
       message_id: messageId,
       message,
@@ -180,6 +198,7 @@ export async function sendMessageStream(
 export async function renameSession(sessionId: string, title: string): Promise<void> {
   await request
     .patch(`${rootUrl}/sessions/${sessionId}`)
+    .set(authHeaders())
     .send({ title })
     .timeout({ response: RESPONSE_TIMEOUT, deadline: DEADLINE_TIMEOUT })
 }
@@ -187,5 +206,6 @@ export async function renameSession(sessionId: string, title: string): Promise<v
 export async function deleteSession(sessionId: string): Promise<void> {
   await request
     .delete(`${rootUrl}/sessions/${sessionId}`)
+    .set(authHeaders())
     .timeout({ response: RESPONSE_TIMEOUT, deadline: DEADLINE_TIMEOUT })
 }

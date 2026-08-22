@@ -4,12 +4,13 @@ import json
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from google.genai import types
 from sqlmodel import Session, select
 
 from server.database import get_session
+from server.middleware.rate_limit import chat_limiter, require_rate_limit
 from server.models import ChatMessage as DBMessage, ChatSession
 from server.schemas import ChatRequest
 from server.services import gemini_service
@@ -80,7 +81,9 @@ def clear_messages(session_id: str = "default", db: Session = Depends(get_sessio
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest, db: Session = Depends(get_session)):
+async def chat(req: Request, request: ChatRequest, db: Session = Depends(get_session)):
+    require_rate_limit(req, chat_limiter)
+
     if not gemini_service.client:
         raise HTTPException(status_code=500, detail="API key not configured")
 
@@ -217,7 +220,7 @@ def _build_contents(message: str, context_block: str, history: list) -> list:
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, db: Session = Depends(get_session)):
+async def chat_stream(req: Request, request: ChatRequest, db: Session = Depends(get_session)):
     """SSE streaming endpoint. Sends token chunks as they arrive from Gemini.
 
     Event types:
@@ -226,6 +229,8 @@ async def chat_stream(request: ChatRequest, db: Session = Depends(get_session)):
     - data: {"done": true, "id": "..."} — stream complete
     - data: {"error": "..."} — error occurred
     """
+    require_rate_limit(req, chat_limiter)
+
     if not gemini_service.client:
         raise HTTPException(status_code=500, detail="API key not configured")
 
