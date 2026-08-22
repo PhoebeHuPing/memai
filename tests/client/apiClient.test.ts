@@ -8,6 +8,7 @@ vi.mock('superagent')
 /** Helper to create a chainable mock that ends with .timeout() */
 function mockChain(resolvedValue: any) {
   const chain: any = {}
+  chain.set = vi.fn().mockReturnValue(chain)
   chain.send = vi.fn().mockReturnValue(chain)
   chain.query = vi.fn().mockReturnValue(chain)
   chain.timeout = vi.fn().mockResolvedValue(resolvedValue)
@@ -16,6 +17,7 @@ function mockChain(resolvedValue: any) {
 
 function mockChainRejected(error: any) {
   const chain: any = {}
+  chain.set = vi.fn().mockReturnValue(chain)
   chain.send = vi.fn().mockReturnValue(chain)
   chain.query = vi.fn().mockReturnValue(chain)
   chain.timeout = vi.fn().mockRejectedValue(error)
