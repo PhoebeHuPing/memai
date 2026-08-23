@@ -4,6 +4,7 @@ Initialises the app, registers middleware, exception handlers, and routers.
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,12 +20,15 @@ from server.schemas import ErrorResponse
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = get_logger(__name__)
 
-app = FastAPI()
 
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: runs startup logic before yielding to the app."""
     create_db_and_tables()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
