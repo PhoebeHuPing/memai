@@ -214,16 +214,17 @@ export default function App() {
                 <ChatMessage key={message.id} message={message} />
               ))
             )}
-            {mutation.isPending && (
-              <div className="loading-indicator">
-                <div className="loading-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+            {mutation.isPending &&
+              messages[messages.length - 1]?.role !== 'assistant' && (
+                <div className="loading-indicator">
+                  <div className="loading-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span>AI is thinking...</span>
                 </div>
-                <span>AI is thinking...</span>
-              </div>
-            )}
+              )}
             <div ref={messagesEndRef} />
           </div>
 
