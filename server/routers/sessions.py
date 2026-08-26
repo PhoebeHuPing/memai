@@ -3,7 +3,7 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlmodel import Session, select
 
 from server.database import get_session
@@ -21,7 +21,7 @@ def list_sessions(db: Session = Depends(get_session)):
             DBMessage.session_id,
             func.max(DBMessage.timestamp).label("last_active"),
             func.min(
-                func.case(
+                case(
                     (DBMessage.role == "user", DBMessage.timestamp),
                     else_=None,
                 )
