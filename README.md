@@ -13,6 +13,12 @@ The current application is optimized for Ministry of Education (MOE) property-ma
 - **Gemini model fallback**: The backend tries the configured Gemini model first, then falls back through a small model chain if generation fails.
 - **Markdown responses**: Assistant messages support GitHub-flavored Markdown and syntax-highlighted code blocks.
 - **Chat UI**: React frontend includes a session sidebar, loading states, clear-chat behavior, source tags, and light/dark theme switching.
+- **Optional API authentication**: When `API_SECRET_KEY` is set, all `/api/` requests require an `Authorization: Bearer <key>` header. Auth is disabled by default for local development.
+- **Rate limiting**: In-memory, per-IP sliding-window limits protect the API. The chat endpoint is limited more strictly than general routes since it consumes Gemini tokens.
+- **Unified error responses**: All errors are returned in a consistent `{ error_code, message, detail }` shape.
+- **Production static serving**: In production the backend serves the built frontend from `dist/` with an SPA fallback, so a single process can host both the API and UI.
+- **Containerized deployment**: A multi-stage `Dockerfile` and `docker-compose.yml` build the frontend, install the backend, and run everything on port 3000 with a persistent data volume.
+- **Continuous integration**: A GitHub Actions workflow runs frontend lint/tests and backend tests on every push and pull request to `main`.
 
 ## Tech Stack
 
@@ -47,27 +53,39 @@ ai-chatbot/
 +-- client/
 |   +-- apiClient.ts              # Frontend API client
 |   +-- index.tsx                 # React entry point
+|   +-- App.css                   # App styles
 |   +-- components/
 |       +-- App.tsx               # Main chat screen
 |       +-- ChatInput.tsx         # Message input form
 |       +-- ChatMessage.tsx       # Message rendering, Markdown, sources
 |       +-- SessionSidebar.tsx    # Multi-session sidebar (create, rename, delete)
 +-- server/
-|   +-- main.py                   # FastAPI app, Gemini integration, chat routes
+|   +-- main.py                   # FastAPI app: middleware, error handlers, routers, static serving
+|   +-- schemas.py                # Pydantic request/response schemas
 |   +-- database.py               # SQLite/SQLModel setup
-|   +-- models.py                 # Chat message database model
-|   +-- data/                     # SQLite DB, PDFs, and ChromaDB storage
-|   +-- scripts/
-|   |   +-- generate_mock_pdf.py
-|   |   +-- ingest_docs.py        # PDF ingestion into the vector store
+|   +-- models.py                 # Chat message and session database models
+|   +-- logging_config.py         # Logging setup
+|   +-- middleware/
+|   |   +-- auth.py               # Optional bearer-token authentication
+|   |   +-- rate_limit.py         # In-memory per-IP rate limiting
+|   +-- routers/
+|   |   +-- chat.py               # Chat and message routes
+|   |   +-- sessions.py           # Session list/rename/delete routes
 |   +-- services/
-|       +-- rag_service.py        # ChromaDB/LlamaIndex retrieval service
+|   |   +-- gemini_service.py     # Gemini generation with model fallback
+|   |   +-- rag_service.py        # ChromaDB/LlamaIndex retrieval service
+|   +-- scripts/
+|   |   +-- ingest_docs.py        # PDF ingestion into the vector store
+|   +-- data/                     # SQLite DB, PDFs, and ChromaDB storage
 +-- tests/
 |   +-- client/                   # Vitest + Testing Library tests
 |   +-- server/                   # Python API/RAG/database tests
 +-- types/
 |   +-- Message.ts                # Shared frontend message/source types
 +-- docs/                         # Project write-ups
++-- .github/workflows/ci.yml      # Frontend + backend CI pipeline
++-- Dockerfile                    # Multi-stage build (frontend + backend)
++-- docker-compose.yml            # Single-container deployment on port 3000
 +-- package.json                  # Node scripts and frontend dependencies
 +-- requirements.txt              # Python backend dependencies
 +-- vite.config.js                # Vite config and API proxy
@@ -86,9 +104,22 @@ Create a `.env` file in the project root. You can start from `.env.sample`.
 ```env
 GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
+
+# Optional
+LLAMA_CLOUD_API_KEY=
+API_SECRET_KEY=
+# ALLOWED_ORIGINS=http://localhost:5173,https://your-domain.com
 ```
 
-`GEMINI_MODEL` is optional. If it is not set, the backend defaults to `gemini-2.5-flash`.
+Environment variables:
+
+- `GOOGLE_GENERATIVE_AI_API_KEY` (required): Gemini API key. Used for both generation and embeddings, so RAG initialization requires it.
+- `GEMINI_MODEL` (optional): Gemini model to try first. Defaults to `gemini-2.5-flash`.
+- `LLAMA_CLOUD_API_KEY` (optional): Only needed if you use LlamaCloud services during ingestion.
+- `API_SECRET_KEY` (optional): When set, all `/api/` requests require an `Authorization: Bearer <key>` header. Leave empty for open access in local development.
+- `ALLOWED_ORIGINS` (optional): Comma-separated list of allowed CORS origins. Defaults to `*` (all origins).
+- `LOG_LEVEL` (optional): Log level for the backend. Defaults to `INFO`.
+- `DEBUG` (optional): When set, `500` responses include the underlying error detail.
 
 ## Install Dependencies
 
@@ -131,6 +162,16 @@ Local services:
 - Backend API: `http://localhost:3000`
 
 The Vite dev server proxies `/api` requests to the backend.
+
+## Run with Docker
+
+Build and start the single-container deployment:
+
+```bash
+docker compose up --build
+```
+
+This runs a multi-stage build that compiles the frontend, installs the backend, and serves both the API and the built UI on `http://localhost:3000`. The backend reads configuration from `.env`, and the SQLite database and ChromaDB store persist in the `app-data` volume across restarts.
 
 ## API Overview
 
@@ -241,11 +282,14 @@ Backend tests live in `tests/server/` and use Python's test tooling with FastAPI
 python -m pytest tests/server
 ```
 
+Both suites also run in CI (`.github/workflows/ci.yml`) on every push and pull request to `main`.
+
 ## Current Notes
 
-- The backend allows all CORS origins for development.
+- CORS defaults to allowing all origins; set `ALLOWED_ORIGINS` to restrict it in production.
 - RAG initialization requires `GOOGLE_GENERATIVE_AI_API_KEY` because Gemini embeddings are used.
 - The included PDF and vector store are development/demo data.
+- The in-memory rate limiter is per-process; multi-instance deployments would need a shared store (e.g. Redis).
 
 ## License
 
