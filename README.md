@@ -212,7 +212,7 @@ Response body:
 3. Ask questions in the chat UI.
 4. The backend retrieves the most relevant chunks, adds them to the Gemini prompt, and stores the final answer in SQLite.
 
-The RAG service currently stores vectors under `server/data/chroma_db` and uses the `nz_school_policy` Chroma collection.
+The RAG service currently stores vectors under `server/data/chroma_db` and uses the `nz_school_property_policy` Chroma collection.
 
 ## Scripts
 
